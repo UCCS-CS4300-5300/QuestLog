@@ -14,3 +14,7 @@ from django.core.wsgi import get_wsgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 application = get_wsgi_application()
+
+# Alias to support platforms configured with:
+#   gunicorn config.wsgi:QuestLog
+QuestLog = application

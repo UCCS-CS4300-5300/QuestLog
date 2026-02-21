@@ -6,4 +6,3 @@ This wrapper allows platforms that expect:
 """
 
 from config.wsgi import application
-
