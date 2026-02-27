@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}About | QuestLog{% endblock %}
+
+{% block content %}
+    <h1>Welcome to the Quest Log about page</h1>
+    <p>This application is designed to help you track your quests and achievements (Chores).</p>
+    <h2>Stakeholders</h2>
+    <ul>
+        <li>Primary stakeholders: customer + end users</li>
+        <li>Secondary stakeholders: development team</li>
+    </ul>
+    <a href="{% url 'QuestLog:home' %}">Home</a>
+{% endblock %}

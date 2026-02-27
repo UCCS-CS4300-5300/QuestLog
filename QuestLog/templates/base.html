@@ -1,0 +1,67 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}QuestLog{% endblock %}</title>
+
+  <script>
+    (function () {
+      const savedTheme = localStorage.getItem("theme");
+      const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+        document.documentElement.classList.add("dark");
+      }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="{% static 'css/site.css' %}">
+</head>
+
+<body>
+  <header>
+    <div class="nav">
+        <div>
+            <img src="{% static 'images/questlog-logo.png' %}"
+                 alt="QuestLog Logo"
+                 style="height:40px; vertical-align:middle;">
+        </div>
+        <div>
+            <a href="{% url 'QuestLog:home' %}">Home</a>
+            <a href="{% url 'QuestLog:about' %}">About</a>
+        </div>
+
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">
+        Dark mode
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    (function () {
+      const button = document.getElementById("themeToggle");
+      if (!button) return;
+
+      function syncLabel() {
+        const isDark = document.documentElement.classList.contains("dark");
+        button.textContent = isDark ? "Light mode" : "Dark mode";
+        button.setAttribute("aria-pressed", String(isDark));
+      }
+
+      button.addEventListener("click", function () {
+        document.documentElement.classList.toggle("dark");
+        const isDark = document.documentElement.classList.contains("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        syncLabel();
+      });
+
+      syncLabel();
+    })();
+  </script>
+</body>
+</html>
