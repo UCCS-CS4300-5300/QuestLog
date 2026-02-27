@@ -13,3 +13,6 @@ Project for group 4 dev team to make QuestLog
 
 ** Running on linux with gunicorn
 *** gunicorn config.wsgi:QuestLog
+
+
+- To invoke the testing proceedure run `python manage.py test QuestLog` after sourcing the venv
