@@ -4,6 +4,6 @@ from . import views
 app_name = 'QuestLog'
 
 urlpatterns = [
-    path('', views.home, name='home'),
+    path('', views.home, name='app'),
     path('about/', views.about, name='about'),
 ]
