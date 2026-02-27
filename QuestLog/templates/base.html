@@ -28,19 +28,33 @@
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:home' %}">App</a>
+        <a class="nav-link" href="{% url 'QuestLog:home' %}">Home</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link">Account</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'QuestLog:tasks' %}">Tasks</a>
       </li>
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:about' %}">About</a>
+      </li>
+    </ul>
+    <ul class="navbar-nav">
+      <li class="nav-item">
+        <a class="nav-link" >Settings</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" >Logout</a>
       </li>
     </ul>
   </div>
 
 </nav>
 
-  <main class="container">
+  <div class="container-fluid">
     {% block content %}{% endblock %}
-  </main>
+  </div>
 
 </body>
 </html>

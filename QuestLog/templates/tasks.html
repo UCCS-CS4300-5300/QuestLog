@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Tasks | Quest Log{% endblock %}
+
+{% block content %}
+        <div class="container">
+        <!--- This should be generated-->
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Clean floor</h5>
+                    <p class="card-text">Clean the floor</p>
+                    <a href="{% url 'QuestLog:complete_task' %}" class="btn btn-primary">Accept</a>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Wash the car</h5>
+                    <p class="card-text">Go out and wash the car</p>
+                    <a href="{% url 'QuestLog:complete_task' %}" class="btn btn-primary">Accept</a>
+                </div>
+            </div>
+        </div>
+        <br>
+        <div class="container">
+            <a  class="btn btn-primary">Add task</a>
+        </div>
+
+{% endblock %}

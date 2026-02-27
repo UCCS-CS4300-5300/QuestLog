@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Home | Quest Log{% endblock %}
+
+{% block content %}
+    <h3>Progress</h3>
+    <div class="progress" style="height:20px">
+        <div class="progress-bar" style="width:40%;"></div>
+    </div>
+
+    <br>
+
+    <h1>Submit task photo #1</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="formFile" class="form-label">Choose a file to upload</label>
+            <input class="form-control" type="file" id="formFile" name="file" accept="image/jpeg,image/png"/>
+        </div>
+        <div class="progress d-none mb-3">
+            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+    </form>
+{% endblock %}
