@@ -2,6 +2,39 @@
 {% block title %}Home | Quest Log{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Quest Log</h1>
-    <a href="{% url 'QuestLog:about' %}">About</a>
+    <div class="p-5 mb-4 bg-light rounded-3 border">
+        <h1 class="display-5 fw-bold">    Quest Log</h1>
+        <p class="fs-5 mb-4">
+            Turn everyday chores into quests. earn XP, stay organized, and compete with friends or roommates.
+        </p>
+        <a class="btn btn-primary btn-lg me-2" href="{% url 'QuestLog:tasks' %}">View Tasks</a>
+        <a class="btn btn-outline-secondary btn-lg" href="{% url 'QuestLog:about' %}">About</a>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">XP & titles</h5>
+                    <p class="card-text">Get rewarded for completing tasks and staying consistent.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Roommate mode</h5>
+                    <p class="card-text">Split chores fairly and keep a shared pool of tasks</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Competition</h5>
+                    <p class="card-text">Challenge friends and climb the leaderboard over time.</p>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
