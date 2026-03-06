@@ -29,12 +29,17 @@ jobs:
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
           OPENAI_REVIEW_MAX_FILES: ${{ vars.OPENAI_REVIEW_MAX_FILES || '30' }}
           OPENAI_REVIEW_MAX_PATCH_CHARS: ${{ vars.OPENAI_REVIEW_MAX_PATCH_CHARS || '50000' }}
+          OPENAI_REVIEW_FAIL_ON_API_ERROR: ${{ vars.OPENAI_REVIEW_FAIL_ON_API_ERROR || 'false' }}
         run: |
           python - <<'PY'
           import json
           import os
           import requests
           from openai import OpenAI
+          from openai import APIConnectionError
+          from openai import APIStatusError
+          from openai import APITimeoutError
+          from openai import RateLimitError
 
           def gh_request(method, url, token, **kwargs):
               headers = kwargs.pop("headers", {})
@@ -59,6 +64,7 @@ jobs:
           model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
           max_files = int(os.environ.get("OPENAI_REVIEW_MAX_FILES", "30"))
           max_patch_chars = int(os.environ.get("OPENAI_REVIEW_MAX_PATCH_CHARS", "50000"))
+          fail_on_api_error = os.environ.get("OPENAI_REVIEW_FAIL_ON_API_ERROR", "false").lower() == "true"
 
           if not github_token:
               raise SystemExit("Missing GITHUB_TOKEN")
@@ -118,6 +124,7 @@ jobs:
               review_markdown = (
                   "No text patch was available to review (for example, only binary files or patch too large)."
               )
+              api_error = None
           else:
               system_prompt = (
                   "You are a strict senior code reviewer. Review only what appears in the diff. "
@@ -150,25 +157,57 @@ jobs:
               }
 
               client = OpenAI(api_key=openai_key)
-              response = client.responses.create(
-                  model=model,
-                  input=[
-                      {
-                          "role": "system",
-                          "content": [{"type": "input_text", "text": system_prompt}],
-                      },
-                      {
-                          "role": "user",
-                          "content": [
-                              {
-                                  "type": "input_text",
-                                  "text": json.dumps(payload, indent=2),
-                              }
-                          ],
-                      },
-                  ],
-              )
-              review_markdown = (response.output_text or "").strip() or "Model returned no review text."
+              api_error = None
+              try:
+                  response = client.responses.create(
+                      model=model,
+                      input=[
+                          {
+                              "role": "system",
+                              "content": [{"type": "input_text", "text": system_prompt}],
+                          },
+                          {
+                              "role": "user",
+                              "content": [
+                                  {
+                                      "type": "input_text",
+                                      "text": json.dumps(payload, indent=2),
+                                  }
+                              ],
+                          },
+                      ],
+                  )
+                  review_markdown = (response.output_text or "").strip() or "Model returned no review text."
+              except RateLimitError as err:
+                  api_error = err
+                  error_code = None
+                  if getattr(err, "response", None) is not None:
+                      try:
+                          error_code = err.response.json().get("error", {}).get("code")
+                      except Exception:
+                          error_code = None
+
+                  if error_code == "insufficient_quota":
+                      review_markdown = (
+                          "OpenAI review skipped: API quota exceeded (`insufficient_quota`). "
+                          "Add credits or update billing limits for the OpenAI project backing `OPENAI_API_KEY`."
+                      )
+                  else:
+                      review_markdown = (
+                          "OpenAI review skipped due to rate limiting. "
+                          "The workflow will try again on the next PR update."
+                      )
+              except (APIConnectionError, APITimeoutError) as err:
+                  api_error = err
+                  review_markdown = (
+                      "OpenAI review skipped due to a temporary API connectivity/timeout issue. "
+                      "The workflow will try again on the next PR update."
+                  )
+              except APIStatusError as err:
+                  api_error = err
+                  review_markdown = (
+                      f"OpenAI review skipped due to API status error `{err.status_code}`."
+                  )
 
           marker = "<!-- openai-pr-review -->"
           short_sha = pr.get("head", {}).get("sha", "")[:7]
@@ -197,4 +236,9 @@ jobs:
               create_url = f"{api_url}/repos/{repo}/issues/{pr_number}/comments"
               gh_request("POST", create_url, github_token, json={"body": body})
               print("Created new AI review comment.")
+
+          if api_error is not None and fail_on_api_error:
+              raise SystemExit(
+                  "OpenAI API error encountered and OPENAI_REVIEW_FAIL_ON_API_ERROR=true, failing workflow."
+              )
           PY
