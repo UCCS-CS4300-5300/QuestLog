@@ -1,9 +1,200 @@
-from openai import OpenAI
-client = OpenAI()
+name: AI Code Review (OpenAI)
 
-response = client.responses.create(
-    model="gpt-5.4",
-    input="Write a short bedtime story about a unicorn."
-)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
-print(response.output_text)
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  ai-review:
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check --no-cache-dir openai requests
+
+      - name: Review PR with OpenAI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+          OPENAI_REVIEW_MAX_FILES: ${{ vars.OPENAI_REVIEW_MAX_FILES || '30' }}
+          OPENAI_REVIEW_MAX_PATCH_CHARS: ${{ vars.OPENAI_REVIEW_MAX_PATCH_CHARS || '50000' }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import requests
+          from openai import OpenAI
+
+          def gh_request(method, url, token, **kwargs):
+              headers = kwargs.pop("headers", {})
+              headers.update(
+                  {
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  }
+              )
+              response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
+              if response.status_code >= 400:
+                  raise RuntimeError(
+                      f"GitHub API error {response.status_code} for {method} {url}: {response.text[:400]}"
+                  )
+              if response.status_code == 204:
+                  return None
+              return response.json()
+
+          github_token = os.environ.get("GITHUB_TOKEN")
+          openai_key = os.environ.get("OPENAI_API_KEY")
+          model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+          max_files = int(os.environ.get("OPENAI_REVIEW_MAX_FILES", "30"))
+          max_patch_chars = int(os.environ.get("OPENAI_REVIEW_MAX_PATCH_CHARS", "50000"))
+
+          if not github_token:
+              raise SystemExit("Missing GITHUB_TOKEN")
+          if not openai_key:
+              raise SystemExit("Missing OPENAI_API_KEY. Add it under repository Settings > Secrets and variables > Actions.")
+
+          event_path = os.environ["GITHUB_EVENT_PATH"]
+          with open(event_path, "r", encoding="utf-8") as f:
+              event = json.load(f)
+
+          pr = event["pull_request"]
+          pr_number = pr["number"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          api_url = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+
+          files = []
+          page = 1
+          while True:
+              url = f"{api_url}/repos/{repo}/pulls/{pr_number}/files?per_page=100&page={page}"
+              batch = gh_request("GET", url, github_token)
+              if not batch:
+                  break
+              files.extend(batch)
+              if len(batch) < 100:
+                  break
+              page += 1
+
+          selected_files = []
+          used_chars = 0
+          skipped_large = False
+          for f in files:
+              patch = f.get("patch") or ""
+              if not patch:
+                  continue
+              if len(selected_files) >= max_files:
+                  skipped_large = True
+                  break
+              remaining = max_patch_chars - used_chars
+              if remaining <= 0:
+                  skipped_large = True
+                  break
+              snippet = patch[:remaining]
+              selected_files.append(
+                  {
+                      "filename": f.get("filename"),
+                      "status": f.get("status"),
+                      "additions": f.get("additions"),
+                      "deletions": f.get("deletions"),
+                      "changes": f.get("changes"),
+                      "patch": snippet,
+                      "patch_was_truncated": len(snippet) < len(patch),
+                  }
+              )
+              used_chars += len(snippet)
+
+          if not selected_files:
+              review_markdown = (
+                  "No text patch was available to review (for example, only binary files or patch too large)."
+              )
+          else:
+              system_prompt = (
+                  "You are a strict senior code reviewer. Review only what appears in the diff. "
+                  "Prioritize correctness, security, data loss, race conditions, and behavioral regressions. "
+                  "Do not praise. Keep it concise. "
+                  "Return markdown with these headings exactly: "
+                  "'## Summary', '## High-Risk Findings', '## Medium-Risk Findings', '## Suggested Tests'. "
+                  "If there are no findings in a section, say 'None'. "
+                  "For each finding include: severity, file path, and why it matters. "
+                  "Only report issues that are supported by the provided diff."
+              )
+
+              payload = {
+                  "repo": repo,
+                  "pull_request": {
+                      "number": pr_number,
+                      "title": pr.get("title"),
+                      "base_ref": pr.get("base", {}).get("ref"),
+                      "head_ref": pr.get("head", {}).get("ref"),
+                      "changed_files_count": pr.get("changed_files"),
+                      "additions": pr.get("additions"),
+                      "deletions": pr.get("deletions"),
+                  },
+                  "diff_files": selected_files,
+                  "note": (
+                      "Some files/patch content may be omitted due to configured limits."
+                      if skipped_large
+                      else "Full selected patch set included."
+                  ),
+              }
+
+              client = OpenAI(api_key=openai_key)
+              response = client.responses.create(
+                  model=model,
+                  input=[
+                      {
+                          "role": "system",
+                          "content": [{"type": "input_text", "text": system_prompt}],
+                      },
+                      {
+                          "role": "user",
+                          "content": [
+                              {
+                                  "type": "input_text",
+                                  "text": json.dumps(payload, indent=2),
+                              }
+                          ],
+                      },
+                  ],
+              )
+              review_markdown = (response.output_text or "").strip() or "Model returned no review text."
+
+          marker = "<!-- openai-pr-review -->"
+          short_sha = pr.get("head", {}).get("sha", "")[:7]
+          body = (
+              f"{marker}\n"
+              f"## AI Code Review (OpenAI)\n\n"
+              f"{review_markdown}\n\n"
+              f"---\n"
+              f"_Model: `{model}` | Commit: `{short_sha}`_"
+          )
+
+          comments_url = f"{api_url}/repos/{repo}/issues/{pr_number}/comments?per_page=100"
+          comments = gh_request("GET", comments_url, github_token)
+
+          existing = None
+          for c in comments:
+              if marker in (c.get("body") or "") and (c.get("user", {}).get("login") == "github-actions[bot]"):
+                  existing = c
+                  break
+
+          if existing:
+              update_url = f"{api_url}/repos/{repo}/issues/comments/{existing['id']}"
+              gh_request("PATCH", update_url, github_token, json={"body": body})
+              print(f"Updated existing AI review comment: {existing['id']}")
+          else:
+              create_url = f"{api_url}/repos/{repo}/issues/{pr_number}/comments"
+              gh_request("POST", create_url, github_token, json={"body": body})
+              print("Created new AI review comment.")
+          PY
