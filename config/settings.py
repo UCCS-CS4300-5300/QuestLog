@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'QuestLog',
     'django_bootstrap5',
+    'behave_django',
 ]
 
 MIDDLEWARE = [
