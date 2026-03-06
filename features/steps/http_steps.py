@@ -1,3 +1,8 @@
+"""
+This is a file used for behave tests
+This file is designed for ensuring all the pages we create are reachable
+When you are goig to create a new page the behave test should be created in here
+"""
 from behave import then, when
 
 
