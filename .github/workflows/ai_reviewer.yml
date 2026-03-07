@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ai-review:
-    if: ${{ github.event.pull_request.draft == false }}
+    if: ${{ secrets.OPENAI_API_KEY }}
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -68,8 +68,6 @@ jobs:
 
           if not github_token:
               raise SystemExit("Missing GITHUB_TOKEN")
-          if not openai_key:
-              raise SystemExit("Missing OPENAI_API_KEY. Add it under repository Settings > Secrets and variables > Actions.")
 
           event_path = os.environ["GITHUB_EVENT_PATH"]
           with open(event_path, "r", encoding="utf-8") as f:
