@@ -28,3 +28,12 @@ def leaderboard(request):
 def create_party(request):
     return render(request, 'create_party.html')
 
+
+def login_view(request):
+    return render(request, 'login.html')
+
+def register(request):
+    return render(request, 'register.html')
+
+def profile(request):
+    return render(request, 'profile.html')

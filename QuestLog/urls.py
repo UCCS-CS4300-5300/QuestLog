@@ -8,6 +8,7 @@ urlpatterns = [
     path('about/', views.about, name='about'),
     path('tasks/', views.tasks, name='tasks'),
     path('complete_task/', views.complete_task, name='complete_task'),
+<<<<<<< HEAD
     path('create_task/', views.create_task, name='complete_task'),
     path('parties/', views.parties, name='tasks'), #join lives here
     path('party_details/', views.party_details, name='tasks'),
@@ -15,6 +16,11 @@ urlpatterns = [
     path('create_party/', views.create_party, name='complete_task'),
     # path('create_party/', views.complete_task, name='complete_task'),
 
+=======
+    path('login/', views.login_view, name='login'),
+    path('register/', views.register, name='register'),
+    path('profile/', views.profile, name='profile'),
+>>>>>>> 98ae343 (Add account sign up/log in UI pages and empty profile skeleton)
 ]
 
 

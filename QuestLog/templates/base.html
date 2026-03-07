@@ -30,9 +30,17 @@
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:home' %}">Home</a>
       </li>
+
       <li class="nav-item">
-        <a class="nav-link">Account</a>
+        <a class="nav-link" href="{% url 'QuestLog:login' %}">Login</a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'QuestLog:register' %}">Sign Up</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
+      </li>
+
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:tasks' %}">Tasks</a>
       </li>
@@ -44,9 +52,7 @@
       <li class="nav-item">
         <a class="nav-link" >Settings</a>
       </li>
-      <li class="nav-item">
-        <a class="nav-link" >Logout</a>
-      </li>
+
     </ul>
   </div>
 
