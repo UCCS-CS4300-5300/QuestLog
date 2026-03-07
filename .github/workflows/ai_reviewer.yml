@@ -3,6 +3,7 @@ name: AI Code Review (OpenAI)
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,18 +12,28 @@ permissions:
 
 jobs:
   ai-review:
-    if: ${{ secrets.OPENAI_API_KEY }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
     runs-on: ubuntu-latest
+    env:
+      HAS_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
     steps:
+      - name: Skip when OPENAI_API_KEY is missing
+        if: ${{ env.HAS_OPENAI_API_KEY != 'true' }}
+        run: |
+          echo "::warning::OPENAI_API_KEY is not configured for this repository/environment. Skipping AI review."
+
       - name: Set up Python
+        if: ${{ env.HAS_OPENAI_API_KEY == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.14"
 
       - name: Install dependencies
+        if: ${{ env.HAS_OPENAI_API_KEY == 'true' }}
         run: pip install --disable-pip-version-check --no-cache-dir openai requests
 
       - name: Review PR with OpenAI
+        if: ${{ env.HAS_OPENAI_API_KEY == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -68,6 +79,8 @@ jobs:
 
           if not github_token:
               raise SystemExit("Missing GITHUB_TOKEN")
+          if not openai_key:
+              raise SystemExit("Missing OPENAI_API_KEY. Add it under repository Settings > Secrets and variables > Actions.")
 
           event_path = os.environ["GITHUB_EVENT_PATH"]
           with open(event_path, "r", encoding="utf-8") as f:
