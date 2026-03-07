@@ -52,6 +52,14 @@ jobs:
           from openai import APITimeoutError
           from openai import RateLimitError
 
+
+          def get_model_id(key):
+              client = OpenAI(api_key=key)
+              models = client.models.list()
+              for model in models.data:
+                  return model.id
+
+
           def gh_request(method, url, token, **kwargs):
               headers = kwargs.pop("headers", {})
               headers.update(
@@ -70,17 +78,39 @@ jobs:
                   return None
               return response.json()
 
+          def format_openai_error(err):
+              parts = [f"type={type(err).__name__}"]
+              status_code = getattr(err, "status_code", None)
+              if status_code is not None:
+                  parts.append(f"status_code={status_code}")
+
+              response = getattr(err, "response", None)
+              if response is not None:
+                  try:
+                      parts.append("response_json=" + json.dumps(response.json(), indent=2))
+                  except Exception:
+                      response_text = getattr(response, "text", None)
+                      if response_text:
+                          parts.append("response_text=" + response_text)
+
+              message = str(err).strip()
+              if message:
+                  parts.append("message=" + message)
+
+              return "\n".join(parts)
+
           github_token = os.environ.get("GITHUB_TOKEN")
           openai_key = os.environ.get("OPENAI_API_KEY")
-          model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
-          max_files = int(os.environ.get("OPENAI_REVIEW_MAX_FILES", "30"))
-          max_patch_chars = int(os.environ.get("OPENAI_REVIEW_MAX_PATCH_CHARS", "50000"))
-          fail_on_api_error = os.environ.get("OPENAI_REVIEW_FAIL_ON_API_ERROR", "false").lower() == "true"
 
           if not github_token:
               raise SystemExit("Missing GITHUB_TOKEN")
           if not openai_key:
               raise SystemExit("Missing OPENAI_API_KEY. Add it under repository Settings > Secrets and variables > Actions.")
+
+          model = get_model_id(openai_key)
+          max_files = int(os.environ.get("OPENAI_REVIEW_MAX_FILES", "30"))
+          max_patch_chars = int(os.environ.get("OPENAI_REVIEW_MAX_PATCH_CHARS", "50000"))
+          fail_on_api_error = os.environ.get("OPENAI_REVIEW_FAIL_ON_API_ERROR", "false").lower() == "true"
 
           event_path = os.environ["GITHUB_EVENT_PATH"]
           with open(event_path, "r", encoding="utf-8") as f:
@@ -216,8 +246,12 @@ jobs:
                   )
               except APIStatusError as err:
                   api_error = err
+                  error_details = format_openai_error(err)
                   review_markdown = (
-                      f"OpenAI review skipped due to API status error `{err.status_code}`."
+                      "OpenAI review skipped due to API status error.\n\n"
+                      "```text\n"
+                      f"{error_details}\n"
+                      "```"
                   )
 
           marker = "<!-- openai-pr-review -->"
