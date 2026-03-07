@@ -26,7 +26,7 @@ jobs:
         if: ${{ env.HAS_OPENAI_API_KEY == 'true' }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.12"
 
       - name: Install dependencies
         if: ${{ env.HAS_OPENAI_API_KEY == 'true' }}
@@ -37,7 +37,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
           OPENAI_REVIEW_MAX_FILES: ${{ vars.OPENAI_REVIEW_MAX_FILES || '30' }}
           OPENAI_REVIEW_MAX_PATCH_CHARS: ${{ vars.OPENAI_REVIEW_MAX_PATCH_CHARS || '50000' }}
           OPENAI_REVIEW_FAIL_ON_API_ERROR: ${{ vars.OPENAI_REVIEW_FAIL_ON_API_ERROR || 'false' }}
