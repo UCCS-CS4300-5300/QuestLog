@@ -33,7 +33,8 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 # Safe default: keep DEBUG off unless explicitly enabled via DJANGO_DEBUG.
 DEBUG = env_bool('DJANGO_DEBUG', default=False)
-RUNNING_TESTS = 'test' in sys.argv
+MANAGEMENT_COMMANDS = set(sys.argv[1:])
+RUNNING_TESTS = bool({"test", "behave"} & MANAGEMENT_COMMANDS)
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
