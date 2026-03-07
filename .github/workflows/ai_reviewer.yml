@@ -3,7 +3,6 @@ name: AI Code Review (OpenAI)
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,7 +11,7 @@ permissions:
 
 jobs:
   ai-review:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false }}
     runs-on: ubuntu-latest
     env:
       HAS_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
@@ -37,6 +36,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'o3' }}
           OPENAI_REVIEW_MAX_FILES: ${{ vars.OPENAI_REVIEW_MAX_FILES || '30' }}
           OPENAI_REVIEW_MAX_PATCH_CHARS: ${{ vars.OPENAI_REVIEW_MAX_PATCH_CHARS || '50000' }}
           OPENAI_REVIEW_FAIL_ON_API_ERROR: ${{ vars.OPENAI_REVIEW_FAIL_ON_API_ERROR || 'false' }}
@@ -50,14 +50,6 @@ jobs:
           from openai import APIStatusError
           from openai import APITimeoutError
           from openai import RateLimitError
-
-
-          def get_model_id(key):
-              client = OpenAI(api_key=key)
-              models = client.models.list()
-              for model in models.data:
-                  return model.id
-
 
           def gh_request(method, url, token, **kwargs):
               headers = kwargs.pop("headers", {})
@@ -106,7 +98,7 @@ jobs:
           if not openai_key:
               raise SystemExit("Missing OPENAI_API_KEY. Add it under repository Settings > Secrets and variables > Actions.")
 
-          model = get_model_id(openai_key)
+          model = os.environ.get("OPENAI_MODEL", "o3")
           max_files = int(os.environ.get("OPENAI_REVIEW_MAX_FILES", "30"))
           max_patch_chars = int(os.environ.get("OPENAI_REVIEW_MAX_PATCH_CHARS", "50000"))
           fail_on_api_error = os.environ.get("OPENAI_REVIEW_FAIL_ON_API_ERROR", "false").lower() == "true"
@@ -199,25 +191,22 @@ jobs:
               client = OpenAI(api_key=openai_key)
               api_error = None
               try:
-                  response = client.responses.create(
+                  response = client.chat.completions.create(
                       model=model,
-                      input=[
+                      messages=[
                           {
                               "role": "system",
-                              "content": [{"type": "input_text", "text": system_prompt}],
+                              "content": system_prompt,
                           },
                           {
                               "role": "user",
-                              "content": [
-                                  {
-                                      "type": "input_text",
-                                      "text": json.dumps(payload, indent=2),
-                                  }
-                              ],
+                              "content": json.dumps(payload, indent=2),
                           },
                       ],
                   )
-                  review_markdown = (response.output_text or "").strip() or "Model returned no review text."
+                  review_markdown = (
+                      (response.choices[0].message.content if response.choices else None) or ""
+                  ).strip() or "Model returned no review text."
               except RateLimitError as err:
                   api_error = err
                   error_code = None
