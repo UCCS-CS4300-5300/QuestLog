@@ -12,3 +12,19 @@ def tasks(request):
 
 def complete_task(request):
     return render(request, 'complete_task.html')
+
+def create_task(request):
+    return render(request, 'create_task.html')
+
+def parties(request):
+    return render(request, 'parties.html')
+
+def party_details(request):
+    return render(request, 'party_details.html')
+
+def leaderboard(request):
+    return render(request, 'leaderboard.html')
+
+def create_party(request):
+    return render(request, 'create_party.html')
+

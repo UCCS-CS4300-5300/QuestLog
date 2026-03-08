@@ -5,10 +5,10 @@ from django.db import models
 
 #Darin
 class User(models.Model):
-
+    field="value"
 #Darin    
 class UserPoints(models.Model):
-    
+    field="value"
 
 #Vlad
 class Party(models.Model):
@@ -38,7 +38,7 @@ class Task(models.Model):
     )
     point_value = models.PositiveIntegerField(default=0)
     proofs = models.FileField(upload_to='proofs/') #pictures of completed task
-    affiliation = models.ForeignKey(Party)
+    affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)
     claimed_at = models.DateTimeField(auto_now_add=True)
