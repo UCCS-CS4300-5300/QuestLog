@@ -1,0 +1,14 @@
+[run]
+source =
+    QuestLog
+    config
+omit =
+    */tests.py
+    */test_*.py
+    */tests/*
+
+[report]
+omit =
+    */tests.py
+    */test_*.py
+    */tests/*
