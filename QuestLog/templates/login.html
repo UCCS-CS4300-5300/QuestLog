@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %} Login | Quest Log {% endblock %}
+
+
+{% block content %}
+
+    <div class="row justify-content-center" >
+
+        <div class="col-md-6  col-lg-5">
+
+            <div class="card">
+
+                <div class="card-body">
+                    <h1 class="h3 mb-4" >Sign In</h1>
+
+
+                    <form>
+
+                        <!--   username or email-->
+                        <div class="mb-3" >
+
+                            <label  for="username"  class="form-label" >
+                                User name or email
+                            </label>
+
+                            <input  type="text"
+                                    class="form-control"
+                                    id="username"
+                                    placeholder="Enter username or email" >
+
+                        </div>
+
+
+                        <!-- pass-->
+                        <div class="mb-3">
+
+                            <label for="password"  class="form-label">
+                                Password
+                            </label>
+
+                            <input  type="password"
+                                    class="form-control"
+                                    id="password"
+                                    placeholder="Enter password">
+
+                        </div>
+
+
+                        <button   type="submit"
+                                 class="btn btn-primary w-100">
+                                 Sign In
+                        </button>
+
+                    </form>
+
+
+                    <!--link to reg-->
+                    <p class="mt-3 mb-0" >
+
+                        Don't have an account?
+
+                        <a href="{% url 'QuestLog:register' %}">
+                            Create one
+                        </a>
+
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+{% endblock %}

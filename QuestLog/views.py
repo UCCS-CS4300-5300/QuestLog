@@ -12,3 +12,12 @@ def tasks(request):
 
 def complete_task(request):
     return render(request, 'complete_task.html')
+
+def login_view(request):
+    return render(request, 'login.html')
+
+def register(request):
+    return render(request, 'register.html')
+
+def profile(request):
+    return render(request, 'profile.html')
