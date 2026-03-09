@@ -9,11 +9,11 @@ urlpatterns = [
     path('tasks/', views.tasks, name='tasks'),
 
     path('complete_task/', views.complete_task, name='complete_task'),
-    path('create_task/', views.create_task, name='complete_task'),
-    path('parties/', views.parties, name='tasks'), #join lives here
-    path('party_details/', views.party_details, name='tasks'),
-    path('leaderboard/', views.leaderboard, name='tasks'),
-    path('create_party/', views.create_party, name='complete_task')
+    path('create_task/', views.create_task, name='create_task'),
+    path('parties/', views.parties, name='parties'), #join lives here
+    path('party_details/', views.party_details, name='party_details'),
+    path('leaderboard/', views.leaderboard, name='leaderboard'),
+    path('create_party/', views.create_party, name='create_party'),
 
     path('login/', views.login_view, name='login'),
     path('register/', views.register, name='register'),
