@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'QuestLog',
     'django_bootstrap5',
     'behave_django',
+    
 ]
 
 MIDDLEWARE = [
@@ -149,3 +150,4 @@ STORAGES = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = "questlog.User"

@@ -1,28 +1,33 @@
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
-# Create your models here.
-# /////////////Structures///////////////////
+from django.conf import settings
 
-#Darin
-class User(models.Model):
-    field="value"
-#Darin    
-class UserPoints(models.Model):
-    field="value"
 
-#Vlad
+
+class User(AbstractUser):
+    display_name = models.CharField(max_length=100)
+
+class Reward(models.Model):
+    class_attributes = models.CharField(default="To be determined")
+
 class Party(models.Model):
-    guid = models.BigIntegerField()# uniq
+    guid = models.BigIntegerField(unique=True)# uniq
     party_name = models.CharField(max_length=200)
-    members = models.ManyToManyField(User, related_name="parties")
-    # group_tasks = models.ForeignKey(Group_task)  #REMOVED
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="parties")
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  #Admin
+    secret = models.CharField(max_length=200) #Maybe wrong type
     # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation                                 
-    # leaderboard = models.OneToOneField(Leaderboard)   #REMOVED
-    # requests = models.ForeignKey(User)    #REMOVED
-    creator = models.ForeignKey(User, on_delete=models.CASCADE)  #Admin
-    secret = models.CharField(max_length=200) #probably wrong type
 
-#Vlad
+class UserPoints(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
+    party = models.ForeignKey(Party,on_delete=models.CASCADE)
+    points = models.PositiveIntegerField(default=0)
+    rewards = models.ForeignKey(Reward,on_delete=models.PROTECT)
+    avatar = models.FileField('avatars/') 
+
+
+
 class Task(models.Model):
     class Status(models.IntegerChoices):
         NOT_STARTED = 0, "Not started"
@@ -30,7 +35,7 @@ class Task(models.Model):
         COMPLETED = 2, "Completed"
 
 
-    owner = models.ForeignKey(User,  on_delete=models.CASCADE)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
     description = models.CharField(max_length=200)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,
@@ -41,5 +46,5 @@ class Task(models.Model):
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)
-    claimed_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(auto_now_add=True)
+    claimed_at = models.DateTimeField()
+    completed_at = models.DateTimeField()
