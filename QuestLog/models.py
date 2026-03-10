@@ -1,8 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from .utilities import validate_upload, secure_upload_path_avatars, secure_upload_path_proofs
-import hashlib
+from .utilities import *
+from django.contrib.auth.hashers import make_password
 import uuid
 
 
@@ -16,9 +16,9 @@ class Reward(models.Model):
 
 class PartySecret(models.Model):
     name = models.CharField(max_length=50)
-    secret_hash = models.CharField(max_length=64, editable=True) #We want to change the password 
+    secret_hash = models.CharField(max_length=64, editable=False) #We want to change the password 
     def set_secret(self, raw_secret):
-        self.secret_hash = hashlib.sha256(raw_secret.encode()).hexdigest()
+        self.secret_hash = make_password(raw_secret) #salt included
 
 class Party(models.Model):
     guid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -33,7 +33,7 @@ class UserPoints(models.Model):
     party = models.ForeignKey(Party,on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward,on_delete=models.PROTECT)
-    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload]) 
+    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file,validate_content_type]) 
 
 
 
@@ -51,7 +51,7 @@ class Task(models.Model):
         default=Status.NOT_STARTED,
     )
     point_value = models.PositiveIntegerField(default=0)
-    proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload]) #pictures of completed task
+    proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file,validate_content_type]) #pictures of completed task
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)
