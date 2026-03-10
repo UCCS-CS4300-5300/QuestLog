@@ -8,4 +8,4 @@ tzdata==2025.3
 whitenoise==6.6.0
 django-bootstrap5==26.2
 Pillow
-magic
+python-magic
