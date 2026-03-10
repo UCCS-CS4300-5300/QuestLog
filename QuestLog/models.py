@@ -9,7 +9,7 @@ class User(AbstractUser):
     display_name = models.CharField(max_length=100)
 
 class Reward(models.Model):
-    class_attributes = models.CharField(default="To be determined")
+    class_attributes = models.CharField(default="To be determined",max_length=100)
 
 class Party(models.Model):
     guid = models.BigIntegerField(unique=True)# uniq
@@ -24,7 +24,7 @@ class UserPoints(models.Model):
     party = models.ForeignKey(Party,on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward,on_delete=models.PROTECT)
-    avatar = models.FileField('avatars/') 
+    avatar = models.FileField(upload_to='avatars/',blank=True,null=True) 
 
 
 
@@ -42,9 +42,9 @@ class Task(models.Model):
         default=Status.NOT_STARTED,
     )
     point_value = models.PositiveIntegerField(default=0)
-    proofs = models.FileField(upload_to='proofs/') #pictures of completed task
+    proofs = models.FileField(upload_to='proofs/',blank=True,null=True) #pictures of completed task
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)
-    claimed_at = models.DateTimeField()
-    completed_at = models.DateTimeField()
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
