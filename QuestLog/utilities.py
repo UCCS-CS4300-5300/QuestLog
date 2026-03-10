@@ -2,7 +2,7 @@
 import os
 import uuid
 
-from django.forms import ValidationError
+from django.core.exceptions import ValidationError
 
 MEDIA_TYPES=['proofs','avatars']
 
@@ -16,19 +16,15 @@ def validate_upload(file):
 
     if file.size > max_size:
         raise ValidationError(f'File too large. Max size: {max_size / (1024*1024)} MB')
+ 
+
+def secure_upload_path_avatars(instance, filename):
+    ext = os.path.splitext(filename)[1].lower()
+    new_filename = f"{uuid.uuid4().hex}{ext}"
+    return f"avatars/{new_filename}"
     
-def secure_upload_wrapper(media_type):
-    def secure_upload_path(instance,filename):
-        ext = os.path.splitext(filename)[1].lower() 
-        new_filename = f"{uuid.uuid4().hex}{ext}"
 
-        if (media_type in MEDIA_TYPES):
-            return os.path.join(media_type,new_filename, ext)
-        else:
-            raise ValidationError("Incorrect media type")
-        
-
-    # ext = os.path.splitext(filename)[1].lower() 
-    # new_filename = f"{uuid.uuid4().hex}{ext}"
-
-    # return os.path.join(new_filename, new_filename)
+def secure_upload_path_proofs(instance, filename):
+    ext = os.path.splitext(filename)[1].lower()
+    new_filename = f"{uuid.uuid4().hex}{ext}"
+    return f"proofs/{new_filename}"
