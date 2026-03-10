@@ -2,8 +2,8 @@
 import os
 import uuid
 from PIL import Image
+import magic
 from django.core.exceptions import ValidationError
-
 MEDIA_TYPES=['proofs','avatars']
 
 def validate_upload(file):
@@ -45,8 +45,7 @@ def scan_for_malicious_code(file):
             raise ValidationError("Malicious content detected")
     file.seek(0)  # reset file pointer after reading
 
-import magic
-from django.core.exceptions import ValidationError
+
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = [
