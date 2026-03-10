@@ -20,14 +20,14 @@ def validate_upload(file):
 
 def secure_upload_path_avatars(instance, filename):
     ext = os.path.splitext(filename)[1].lower()
-    new_filename = os.path.join("avatars",uuid.uuid4().hex,ext)
-    return new_filename
+    new_filename = f"{uuid.uuid4().hex}{ext}"
+    return os.path.join("avatars", new_filename)
     
 
 def secure_upload_path_proofs(instance, filename):
     ext = os.path.splitext(filename)[1].lower()
-    new_filename = os.path.join("proofs",uuid.uuid4().hex,ext)
-    return new_filename
+    new_filename = f"{uuid.uuid4().hex}{ext}"
+    return os.path.join("proofs", new_filename)
 
 def scan_for_malicious_code(file):
     dangerous_patterns = [
