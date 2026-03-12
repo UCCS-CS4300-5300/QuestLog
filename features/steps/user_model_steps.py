@@ -84,6 +84,12 @@ def step_submit_login_form(context, username, password):
     )
 
 
+@given('I am authenticated as "{username}"')
+def step_authenticate_existing_user(context, username):
+    user = get_user_model().objects.get(username=username)
+    context.test.client.force_login(user)
+
+
 @then('a Quest Log user with username "{username}" should exist')
 def step_user_exists(context, username):
     user_model = get_user_model()

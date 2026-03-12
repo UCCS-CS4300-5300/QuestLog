@@ -16,6 +16,19 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
+from .urls import urlpatterns
+
+
+EXPECTED_VIEW_STATUSES = {
+    "home": 200,
+    "about": 200,
+    "tasks": 200,
+    "complete_task": 200,
+    "login": 200,
+    "register": 200,
+    "profile": 302,
+}
+
 
 class ViewReachabilityTests(TestCase):
     """
@@ -26,6 +39,15 @@ class ViewReachabilityTests(TestCase):
     def assert_view_status(self, view_name, expected_status=200):
         response = self.client.get(reverse(f"QuestLog:{view_name}"))
         self.assertEqual(response.status_code, expected_status)
+
+    def test_all_named_urls_are_accounted_for(self):
+        discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
+        self.assertEqual(discovered_names, set(EXPECTED_VIEW_STATUSES))
+
+    def test_all_named_urls_return_expected_status_codes(self):
+        for view_name, expected_status in EXPECTED_VIEW_STATUSES.items():
+            with self.subTest(view_name=view_name):
+                self.assert_view_status(view_name, expected_status)
 
     def test_home_view_returns_200(self):
         self.assert_view_status("home", 200)
