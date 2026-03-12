@@ -31,8 +31,12 @@ SECRET_KEY = 'django-insecure-b)04hpis%1byb3$r6)fbd95f_$ve^=3(mo9@-y1h973(i(tg%j
 # SECURITY WARNING: don't run with debug turned on in production!
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-# Safe default: keep DEBUG off unless explicitly enabled via DJANGO_DEBUG.
-DEBUG = env_bool('DJANGO_DEBUG', default=False)
+DEBUG_ENV = os.environ.get('DJANGO_DEBUG')
+if DEBUG_ENV is None:
+    # Default to development settings locally, but stay production-safe on Render.
+    DEBUG = not bool(RENDER_EXTERNAL_HOSTNAME)
+else:
+    DEBUG = env_bool('DJANGO_DEBUG')
 MANAGEMENT_COMMANDS = set(sys.argv[1:])
 RUNNING_TESTS = bool({"test", "behave"} & MANAGEMENT_COMMANDS)
 if RENDER_EXTERNAL_HOSTNAME:

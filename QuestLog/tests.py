@@ -89,6 +89,38 @@ class DeploymentEntrypointTests(TestCase):
 
 
 class SettingsBranchCoverageTests(TestCase):
+    def test_local_development_defaults_to_debug_and_non_manifest_static_storage(self):
+        module = importlib.import_module("config.settings")
+        original_argv = sys.argv[:]
+        original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        original_debug = os.environ.get("DJANGO_DEBUG")
+
+        try:
+            os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            os.environ.pop("DJANGO_DEBUG", None)
+            sys.argv = ["manage.py", "runserver"]
+
+            reloaded = importlib.reload(module)
+            self.assertTrue(reloaded.DEBUG)
+            self.assertNotIn("whitenoise.middleware.WhiteNoiseMiddleware", reloaded.MIDDLEWARE)
+            self.assertEqual(
+                reloaded.STORAGES["staticfiles"]["BACKEND"],
+                "django.contrib.staticfiles.storage.StaticFilesStorage",
+            )
+        finally:
+            if original_render is None:
+                os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            else:
+                os.environ["RENDER_EXTERNAL_HOSTNAME"] = original_render
+
+            if original_debug is None:
+                os.environ.pop("DJANGO_DEBUG", None)
+            else:
+                os.environ["DJANGO_DEBUG"] = original_debug
+
+            sys.argv = original_argv
+            importlib.reload(module)
+
     def test_render_hostname_and_whitenoise_branches(self):
         module = importlib.import_module("config.settings")
         original_argv = sys.argv[:]
