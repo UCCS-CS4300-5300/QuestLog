@@ -239,6 +239,49 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse("QuestLog:profile"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
+    def test_login_uses_safe_next_redirect(self):
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+            display_name="Quest Master",
+        )
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "quester",
+                "password": "StrongPassword123!",
+                "next": reverse("QuestLog:tasks"),
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
+        self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
+
+    def test_login_redirects_authenticated_user_to_profile(self):
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+            display_name="Quest Master",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:login"))
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+
+    def test_register_redirects_authenticated_user_to_profile(self):
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+            display_name="Quest Master",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:register"))
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+
     def test_profile_page_displays_logged_in_user_details(self):
         user = get_user_model().objects.create_user(
             username="quester",
