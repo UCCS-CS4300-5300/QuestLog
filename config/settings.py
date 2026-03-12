@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     'behave_django',
 ]
 
+AUTH_USER_MODEL = 'QuestLog.User'
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -135,6 +137,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / "QuestLog" / "static",
 ]
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -147,5 +151,8 @@ STORAGES = {
         ),
     },
 }
+
+LOGIN_REDIRECT_URL = 'QuestLog:profile'
+LOGIN_URL = 'QuestLog:login'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

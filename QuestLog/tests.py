@@ -7,8 +7,12 @@ I also added a class SettingsBranchCoverageTests for ensuring the seetings for t
 
 import importlib
 import os
+import shutil
 import sys
+import tempfile
 
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -34,6 +38,17 @@ class ViewReachabilityTests(TestCase):
 
     def test_complete_task_view_returns_200(self):
         self.assert_view_status("complete_task", 200)
+
+    def test_login_view_returns_200(self):
+        self.assert_view_status("login", 200)
+
+    def test_register_view_returns_200(self):
+        self.assert_view_status("register", 200)
+
+    def test_profile_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:profile"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
 
 
 class DeploymentEntrypointTests(TestCase):
@@ -79,3 +94,109 @@ class SettingsBranchCoverageTests(TestCase):
 
             sys.argv = original_argv
             importlib.reload(module)
+
+
+class UserModelTests(TestCase):
+    def test_user_model_is_questlog_user(self):
+        user_model = get_user_model()
+
+        self.assertEqual(user_model._meta.label, "QuestLog.User")
+        self.assertEqual(
+            user_model._meta.get_field("profile_picture").upload_to,
+            "profile_pictures/",
+        )
+
+    def test_create_user_supports_username_display_name_and_password(self):
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+            display_name="Quest Master",
+        )
+
+        self.assertEqual(user.username, "quester")
+        self.assertEqual(user.display_name, "Quest Master")
+        self.assertTrue(user.check_password("StrongPassword123!"))
+
+    def test_string_representation_prefers_display_name(self):
+        user = get_user_model()(username="quester", display_name="Quest Master")
+
+        self.assertEqual(str(user), "Quest Master")
+
+
+class AuthenticationFlowTests(TestCase):
+    TEST_IMAGE_BYTES = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+        b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+        b"\x00\x02\x02D\x01\x00;"
+    )
+
+    def setUp(self):
+        self.temp_media_root = tempfile.mkdtemp()
+        self.settings_override = self.settings(MEDIA_ROOT=self.temp_media_root)
+        self.settings_override.enable()
+
+    def tearDown(self):
+        self.settings_override.disable()
+        shutil.rmtree(self.temp_media_root, ignore_errors=True)
+
+    def make_profile_picture(self):
+        return SimpleUploadedFile(
+            "avatar.gif",
+            self.TEST_IMAGE_BYTES,
+            content_type="image/gif",
+        )
+
+    def test_register_creates_user_with_profile_picture_and_logs_them_in(self):
+        response = self.client.post(
+            reverse("QuestLog:register"),
+            {
+                "display_name": "Quest Master",
+                "username": "quester",
+                "email": "quester@example.com",
+                "profile_picture": self.make_profile_picture(),
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
+        )
+
+        user = get_user_model().objects.get(username="quester")
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertEqual(user.display_name, "Quest Master")
+        self.assertEqual(user.email, "quester@example.com")
+        self.assertTrue(user.profile_picture.name.startswith("profile_pictures/"))
+        self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
+
+    def test_login_authenticates_existing_user(self):
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+            display_name="Quest Master",
+        )
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "quester",
+                "password": "StrongPassword123!",
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
+
+    def test_profile_page_displays_logged_in_user_details(self):
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+            display_name="Quest Master",
+            email="quester@example.com",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Quest Master")
+        self.assertContains(response, "quester")
+        self.assertContains(response, "quester@example.com")
