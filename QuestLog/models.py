@@ -1,14 +1,10 @@
 from django.db import models
-# from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from .utilities import *
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
 
 
-# class User(AbstractUser):
-#     display_name = models.CharField(max_length=100,blank=True,null=True)
-    
 
 class Reward(models.Model):
     class_attributes = models.CharField(default="To be determined",max_length=100)
@@ -16,7 +12,6 @@ class Reward(models.Model):
 
 
 class PartySecret(models.Model):
-    # name = models.CharField(max_length=50)
     _secret_hash = models.CharField(max_length=128, editable=False) 
 
     def set_secret(self, raw_secret):
