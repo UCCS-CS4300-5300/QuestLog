@@ -84,7 +84,7 @@ class UserPoints(models.Model):
     party = models.ForeignKey(Party,on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward,on_delete=models.PROTECT)
-    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file,validate_content_type]) 
+    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) 
 
 
 
@@ -102,7 +102,7 @@ class Task(models.Model):
         default=Status.NOT_STARTED,
     )
     point_value = models.PositiveIntegerField(default=0)
-    proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file,validate_content_type]) #pictures of completed task
+    proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) #pictures of completed task
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)
