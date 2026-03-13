@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db import models
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
-from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avatars, secure_upload_path_proofs, validate_content_type, validate_image_file, validate_upload
+from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avatars, secure_upload_path_proofs, validate_image_file, validate_upload
 
 def profile_picture_upload_to(instance, filename):
     extension = Path(filename).suffix.lower()
