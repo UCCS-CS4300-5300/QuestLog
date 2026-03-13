@@ -1,5 +1,13 @@
+from pathlib import Path
+from uuid import uuid4
+
 from django.conf import settings
 from django.db import models
+
+
+def profile_picture_upload_to(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"profile_pictures/{uuid4().hex}{extension}"
 
 
 class UserProfile(models.Model):
@@ -10,7 +18,7 @@ class UserProfile(models.Model):
     )
     display_name = models.CharField(max_length=150)
     profile_picture = models.ImageField(
-        upload_to="profile_pictures/",
+        upload_to=profile_picture_upload_to,
         blank=True,
     )
 
@@ -23,7 +31,6 @@ def get_user_profile(user):
         user=user,
         defaults={"display_name": user.get_username()},
     )
-    user._state.fields_cache["profile"] = profile
     return profile
 
 
@@ -39,7 +46,6 @@ def save_user_profile(user, display_name=None, profile_picture=None):
         profile.profile_picture = profile_picture
 
     profile.save()
-    user._state.fields_cache["profile"] = profile
     return profile
 
 

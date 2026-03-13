@@ -10,7 +10,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 
 from .forms import QuestLogUserCreationForm
-from .models import UserProfile, get_user_profile
+from .models import UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
 
@@ -185,12 +185,12 @@ class UserProfileTests(TestCase):
             username="liljit",
             password="6767676767676767",
         )
+        generated_path = profile_picture_upload_to(user.profile, "avatar.gif")
 
         self.assertEqual(user.profile.display_name, "liljit")
-        self.assertEqual(
-            user.profile._meta.get_field("profile_picture").upload_to,
-            "profile_pictures/",
-        )
+        self.assertTrue(generated_path.startswith("profile_pictures/"))
+        self.assertTrue(generated_path.endswith(".gif"))
+        self.assertNotEqual(generated_path, "profile_pictures/avatar.gif")
 
     def test_string_representation_prefers_display_name(self):
         user = get_user_model().objects.create_user(
@@ -265,11 +265,12 @@ class AuthenticationFlowTests(TestCase):
         )
 
         user = get_user_model().objects.get(username="liljit")
+        profile = get_user_profile(user)
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
-        self.assertEqual(user.profile.display_name, "liljitdisplay")
+        self.assertEqual(profile.display_name, "liljitdisplay")
         self.assertEqual(user.email, "liljit@example.com")
-        self.assertTrue(user.profile.profile_picture.name.startswith("profile_pictures/"))
+        self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
     def test_register_allows_missing_profile_picture(self):
@@ -285,10 +286,11 @@ class AuthenticationFlowTests(TestCase):
         )
 
         user = get_user_model().objects.get(username="liljit")
+        profile = get_user_profile(user)
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
-        self.assertEqual(user.profile.display_name, "liljitdisplay")
-        self.assertFalse(user.profile.profile_picture.name)
+        self.assertEqual(profile.display_name, "liljitdisplay")
+        self.assertFalse(profile.profile_picture.name)
 
     def test_login_authenticates_existing_user(self):
         user = self.create_user("liljit")
@@ -378,6 +380,20 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
 
+    def test_login_rejects_backslash_prefixed_redirects(self):
+        self.create_user("liljit")
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
+                "next": "/\\\\evil",
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+
     def test_login_redirects_authenticated_user_to_profile(self):
         user = self.create_user("liljit")
         self.client.force_login(user)
@@ -431,27 +447,42 @@ class AuthenticationFlowTests(TestCase):
 
     def test_production_media_requires_authentication(self):
         user = self.create_user("liljit", profile_picture=self.make_profile_picture())
+        profile = get_user_profile(user)
 
         with self.settings(DEBUG=False):
             self.reload_urlconf()
-            response = self.client.get(user.profile.profile_picture.url)
+            response = self.client.get(profile.profile_picture.url)
 
         self.assertRedirects(
             response,
-            f"{reverse('QuestLog:login')}?next={user.profile.profile_picture.url}",
+            f"{reverse('QuestLog:login')}?next={profile.profile_picture.url}",
         )
         self.reload_urlconf()
 
     def test_production_media_serves_profile_picture_for_authenticated_user(self):
         user = self.create_user("liljit", profile_picture=self.make_profile_picture())
+        profile = get_user_profile(user)
         self.client.force_login(user)
 
         with self.settings(DEBUG=False):
             self.reload_urlconf()
-            response = self.client.get(user.profile.profile_picture.url)
+            response = self.client.get(profile.profile_picture.url)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
+        self.reload_urlconf()
+
+    def test_production_media_rejects_other_users_profile_pictures(self):
+        owner = self.create_user("liljit", profile_picture=self.make_profile_picture())
+        intruder = self.create_user("otherliljit")
+        owner_profile = get_user_profile(owner)
+        self.client.force_login(intruder)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(owner_profile.profile_picture.url)
+
+        self.assertEqual(response.status_code, 404)
         self.reload_urlconf()
 
     def test_production_media_rejects_path_traversal(self):
@@ -481,8 +512,11 @@ class AuthenticationFlowTests(TestCase):
 
         user = form.save(commit=False)
         self.assertIsNone(user.pk)
+        self.assertFalse(hasattr(user, "_questlog_profile_data"))
         user.save()
+        form.save_profile(user)
+        profile = get_user_profile(user)
 
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
-        self.assertEqual(user.profile.display_name, "liljitdisplay")
-        self.assertTrue(user.profile.profile_picture.name.startswith("profile_pictures/"))
+        self.assertEqual(profile.display_name, "liljitdisplay")
+        self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))

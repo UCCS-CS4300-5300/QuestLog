@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
+from .models import save_user_profile
+
 User = get_user_model()
 
 
@@ -28,15 +30,19 @@ class QuestLogUserCreationForm(UserCreationForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        user._questlog_profile_data = {
-            "display_name": self.cleaned_data["display_name"],
-            "profile_picture": self.cleaned_data.get("profile_picture"),
-        }
 
         if commit:
             user.save()
+            self.save_profile(user)
 
         return user
+
+    def save_profile(self, user):
+        return save_user_profile(
+            user,
+            display_name=self.cleaned_data["display_name"],
+            profile_picture=self.cleaned_data.get("profile_picture"),
+        )
 
 
 class QuestLogAuthenticationForm(AuthenticationForm):
