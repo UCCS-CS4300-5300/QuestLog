@@ -36,6 +36,42 @@ class ViewReachabilityTests(TestCase):
         self.assert_view_status("complete_task", 200)
 
 
+class PartyViewsTemplateTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from .models import Party
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="alice",
+            email="alice@example.com",
+            password="test-password",
+        )
+        self.party = Party.objects.create(
+            party_name="Test Party",
+            creator=self.user,
+        )
+        self.party.members.add(self.user)
+
+    def test_parties_view_uses_template_and_lists_parties(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("QuestLog:parties"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "parties.html")
+        self.assertIn("parties", response.context)
+        self.assertIn(self.party, list(response.context["parties"]))
+
+    def test_party_details_view_uses_template_and_shows_party(self):
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("QuestLog:party_details"),
+            {"guid": str(self.party.guid)},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "party_details.html")
+        self.assertEqual(response.context.get("party"), self.party)
+
+
 class DeploymentEntrypointTests(TestCase):
     def test_config_wsgi_exports_application_alias(self):
         module = importlib.import_module("config.wsgi")

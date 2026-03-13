@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Party details | Quest Log{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-start justify-content-between mb-3">
+    <div>
+      <div class="mb-1">
+        <a class="link-secondary text-decoration-none" href="{% url 'QuestLog:parties' %}">← Back to parties</a>
+      </div>
+      <h1 class="h3 mb-1">{{ party.party_name }}</h1>
+      <div class="text-muted">{{ members|length }} member{{ members|length|pluralize }}</div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Members</div>
+        <div class="card-body">
+          {% if members %}
+            <ul class="list-group list-group-flush">
+              {% for member in members %}
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                  <span>{{ member.username }}</span>
+                  {% if request.user.is_authenticated and member.pk == request.user.pk %}
+                    <span class="badge text-bg-primary">You</span>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-muted">No members found.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card h-100">
+        <div class="card-header fw-semibold">Tasks</div>
+        <div class="card-body">
+          {% if tasks %}
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th class="text-end">Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for task in tasks %}
+                    <tr>
+                      <td class="fw-semibold">{{ task.description }}</td>
+                      <td>{{ task.get_status_display }}</td>
+                      <td>{{ task.owner.username }}</td>
+                      <td class="text-end">{{ task.point_value }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-muted">No tasks in this party yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
