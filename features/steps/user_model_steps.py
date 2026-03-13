@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from QuestLog.models import get_user_profile
+
 
 TEST_IMAGE_BYTES = (
     b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
@@ -19,39 +21,41 @@ def make_profile_picture():
     )
 
 
+def create_user_with_profile(username, display_name, password, profile_picture=None):
+    user = get_user_model().objects.create_user(
+        username=username,
+        password=password,
+    )
+    profile = get_user_profile(user)
+    profile.display_name = display_name
+    if profile_picture:
+        profile.profile_picture = profile_picture
+    profile.save()
+    return user
+
+
 @given(
     'a Quest Log user exists with username "{username}", display name "{display_name}", and password "{password}"'
 )
 def step_create_existing_user(context, username, display_name, password):
-    user_model = get_user_model()
-    context.user = user_model.objects.create_user(
-        username=username,
-        display_name=display_name,
-        password=password,
-    )
+    context.user = create_user_with_profile(username, display_name, password)
 
 
 @when(
     'I create a Quest Log user with username "{username}", display name "{display_name}", and password "{password}"'
 )
 def step_create_user(context, username, display_name, password):
-    user_model = get_user_model()
-    context.user = user_model.objects.create_user(
-        username=username,
-        display_name=display_name,
-        password=password,
-    )
+    context.user = create_user_with_profile(username, display_name, password)
 
 
 @when(
     'I create a Quest Log user with username "{username}", display name "{display_name}", password "{password}", and a profile picture'
 )
 def step_create_user_with_profile_picture(context, username, display_name, password):
-    user_model = get_user_model()
-    context.user = user_model.objects.create_user(
-        username=username,
-        display_name=display_name,
-        password=password,
+    context.user = create_user_with_profile(
+        username,
+        display_name,
+        password,
         profile_picture=make_profile_picture(),
     )
 
@@ -100,9 +104,10 @@ def step_user_exists(context, username):
 @then('the user "{username}" should have display name "{display_name}"')
 def step_user_has_display_name(context, username, display_name):
     user = get_user_model().objects.get(username=username)
-    assert user.display_name == display_name, (
+    profile = get_user_profile(user)
+    assert profile.display_name == display_name, (
         f'Expected user "{username}" to have display name "{display_name}", '
-        f'got "{user.display_name}"'
+        f'got "{profile.display_name}"'
     )
 
 
@@ -115,10 +120,11 @@ def step_user_has_usable_password(context, username, password):
 @then('the user "{username}" should have a stored profile picture')
 def step_user_has_profile_picture(context, username):
     user = get_user_model().objects.get(username=username)
-    assert user.profile_picture.name, f'Expected user "{username}" to have a profile picture'
-    assert user.profile_picture.name.startswith("profile_pictures/"), (
+    profile = get_user_profile(user)
+    assert profile.profile_picture.name, f'Expected user "{username}" to have a profile picture'
+    assert profile.profile_picture.name.startswith("profile_pictures/"), (
         f'Expected user "{username}" profile picture to be stored under profile_pictures/, '
-        f'got "{user.profile_picture.name}"'
+        f'got "{profile.profile_picture.name}"'
     )
 
 

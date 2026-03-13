@@ -1,10 +1,3 @@
-"""
-This file is for all test cases for Django
-When you add a new view there should be a test case function added to ViewReachabilityTests class
-For testing the deployment there is a DeploymentEnrtypointTests class that will ensure the deployments work
-I also added a class SettingsBranchCoverageTests for ensuring the seetings for the project are working as expected
-"""
-
 import importlib
 import os
 import shutil
@@ -13,9 +6,10 @@ import tempfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
-from django.urls import reverse
+from django.test import SimpleTestCase, TestCase
+from django.urls import Resolver404, clear_url_caches, resolve, reverse
 
+from .models import UserProfile, get_user_profile
 from .urls import urlpatterns
 
 
@@ -31,11 +25,6 @@ EXPECTED_VIEW_STATUSES = {
 
 
 class ViewReachabilityTests(TestCase):
-    """
-    This class is to ensure all views in Django are reachable
-    When you create a new view add a function to ensure the endpoint is reachable and returns the correct response code
-    """
-
     def assert_view_status(self, view_name, expected_status=200):
         response = self.client.get(reverse(f"QuestLog:{view_name}"))
         self.assertEqual(response.status_code, expected_status)
@@ -48,24 +37,6 @@ class ViewReachabilityTests(TestCase):
         for view_name, expected_status in EXPECTED_VIEW_STATUSES.items():
             with self.subTest(view_name=view_name):
                 self.assert_view_status(view_name, expected_status)
-
-    def test_home_view_returns_200(self):
-        self.assert_view_status("home", 200)
-
-    def test_about_view_returns_200(self):
-        self.assert_view_status("about", 200)
-
-    def test_tasks_view_returns_200(self):
-        self.assert_view_status("tasks", 200)
-
-    def test_complete_task_view_returns_200(self):
-        self.assert_view_status("complete_task", 200)
-
-    def test_login_view_returns_200(self):
-        self.assert_view_status("login", 200)
-
-    def test_register_view_returns_200(self):
-        self.assert_view_status("register", 200)
 
     def test_profile_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:profile"))
@@ -88,8 +59,8 @@ class DeploymentEntrypointTests(TestCase):
         self.assertIsNotNone(module.application)
 
 
-class SettingsBranchCoverageTests(TestCase):
-    def test_local_development_defaults_to_debug_and_non_manifest_static_storage(self):
+class SettingsBranchCoverageTests(SimpleTestCase):
+    def test_debug_defaults_to_false_when_unset(self):
         module = importlib.import_module("config.settings")
         original_argv = sys.argv[:]
         original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
@@ -98,6 +69,38 @@ class SettingsBranchCoverageTests(TestCase):
         try:
             os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
             os.environ.pop("DJANGO_DEBUG", None)
+            sys.argv = ["manage.py", "runserver"]
+
+            reloaded = importlib.reload(module)
+            self.assertFalse(reloaded.DEBUG)
+            self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", reloaded.MIDDLEWARE)
+            self.assertEqual(
+                reloaded.STORAGES["staticfiles"]["BACKEND"],
+                "whitenoise.storage.CompressedManifestStaticFilesStorage",
+            )
+        finally:
+            if original_render is None:
+                os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            else:
+                os.environ["RENDER_EXTERNAL_HOSTNAME"] = original_render
+
+            if original_debug is None:
+                os.environ.pop("DJANGO_DEBUG", None)
+            else:
+                os.environ["DJANGO_DEBUG"] = original_debug
+
+            sys.argv = original_argv
+            importlib.reload(module)
+
+    def test_explicit_debug_true_uses_dev_static_storage(self):
+        module = importlib.import_module("config.settings")
+        original_argv = sys.argv[:]
+        original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        original_debug = os.environ.get("DJANGO_DEBUG")
+
+        try:
+            os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            os.environ["DJANGO_DEBUG"] = "1"
             sys.argv = ["manage.py", "runserver"]
 
             reloaded = importlib.reload(module)
@@ -121,7 +124,7 @@ class SettingsBranchCoverageTests(TestCase):
             sys.argv = original_argv
             importlib.reload(module)
 
-    def test_render_hostname_and_whitenoise_branches(self):
+    def test_render_hostname_is_added_when_present(self):
         module = importlib.import_module("config.settings")
         original_argv = sys.argv[:]
         original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
@@ -150,31 +153,53 @@ class SettingsBranchCoverageTests(TestCase):
             importlib.reload(module)
 
 
-class UserModelTests(TestCase):
-    def test_user_model_is_questlog_user(self):
-        user_model = get_user_model()
+class UrlConfigurationTests(SimpleTestCase):
+    def reload_urlconf(self):
+        clear_url_caches()
+        return importlib.reload(importlib.import_module("config.urls"))
 
-        self.assertEqual(user_model._meta.label, "QuestLog.User")
-        self.assertEqual(
-            user_model._meta.get_field("profile_picture").upload_to,
-            "profile_pictures/",
-        )
+    def test_media_urls_are_not_served_when_debug_is_disabled(self):
+        with self.settings(DEBUG=False):
+            urlconf = self.reload_urlconf()
+            with self.assertRaises(Resolver404):
+                resolve("/media/profile_pictures/avatar.gif", urlconf=urlconf)
 
-    def test_create_user_supports_username_display_name_and_password(self):
+        self.reload_urlconf()
+
+    def test_media_urls_are_served_when_debug_is_enabled(self):
+        with self.settings(DEBUG=True):
+            urlconf = self.reload_urlconf()
+            match = resolve("/media/profile_pictures/avatar.gif", urlconf=urlconf)
+            self.assertIsNotNone(match)
+
+        self.reload_urlconf()
+
+
+class UserProfileTests(TestCase):
+    def test_user_model_stays_on_django_auth_user(self):
+        self.assertEqual(get_user_model()._meta.label, "auth.User")
+
+    def test_create_user_creates_profile_with_default_display_name(self):
         user = get_user_model().objects.create_user(
             username="quester",
             password="StrongPassword123!",
-            display_name="Quest Master",
         )
 
-        self.assertEqual(user.username, "quester")
-        self.assertEqual(user.display_name, "Quest Master")
-        self.assertTrue(user.check_password("StrongPassword123!"))
+        self.assertEqual(user.profile.display_name, "quester")
+        self.assertEqual(
+            user.profile._meta.get_field("profile_picture").upload_to,
+            "profile_pictures/",
+        )
 
     def test_string_representation_prefers_display_name(self):
-        user = get_user_model()(username="quester", display_name="Quest Master")
+        user = get_user_model().objects.create_user(
+            username="quester",
+            password="StrongPassword123!",
+        )
+        user.profile.display_name = "Quest Master"
+        user.profile.save()
 
-        self.assertEqual(str(user), "Quest Master")
+        self.assertEqual(str(user.profile), "Quest Master")
 
 
 class AuthenticationFlowTests(TestCase):
@@ -200,7 +225,27 @@ class AuthenticationFlowTests(TestCase):
             content_type="image/gif",
         )
 
-    def test_register_creates_user_with_profile_picture_and_logs_them_in(self):
+    def create_user(
+        self,
+        username,
+        password="StrongPassword123!",
+        display_name="Quest Master",
+        email="",
+        profile_picture=None,
+    ):
+        user = get_user_model().objects.create_user(
+            username=username,
+            password=password,
+            email=email,
+        )
+        profile = get_user_profile(user)
+        profile.display_name = display_name
+        if profile_picture:
+            profile.profile_picture = profile_picture
+        profile.save()
+        return user
+
+    def test_register_creates_user_profile_and_logs_them_in(self):
         response = self.client.post(
             reverse("QuestLog:register"),
             {
@@ -216,17 +261,31 @@ class AuthenticationFlowTests(TestCase):
         user = get_user_model().objects.get(username="quester")
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
-        self.assertEqual(user.display_name, "Quest Master")
+        self.assertEqual(user.profile.display_name, "Quest Master")
         self.assertEqual(user.email, "quester@example.com")
-        self.assertTrue(user.profile_picture.name.startswith("profile_pictures/"))
+        self.assertTrue(user.profile.profile_picture.name.startswith("profile_pictures/"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
-    def test_login_authenticates_existing_user(self):
-        user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
-            display_name="Quest Master",
+    def test_register_allows_missing_profile_picture(self):
+        response = self.client.post(
+            reverse("QuestLog:register"),
+            {
+                "display_name": "Quest Master",
+                "username": "quester",
+                "email": "quester@example.com",
+                "password1": "StrongPassword123!",
+                "password2": "StrongPassword123!",
+            },
         )
+
+        user = get_user_model().objects.get(username="quester")
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertEqual(user.profile.display_name, "Quest Master")
+        self.assertFalse(user.profile.profile_picture.name)
+
+    def test_login_authenticates_existing_user(self):
+        user = self.create_user("quester")
 
         response = self.client.post(
             reverse("QuestLog:login"),
@@ -240,11 +299,7 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
     def test_login_uses_safe_next_redirect(self):
-        user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
-            display_name="Quest Master",
-        )
+        user = self.create_user("quester")
 
         response = self.client.post(
             reverse("QuestLog:login"),
@@ -258,12 +313,39 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse("QuestLog:tasks"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
-    def test_login_redirects_authenticated_user_to_profile(self):
-        user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
-            display_name="Quest Master",
+    def test_login_allows_redirects_to_configured_hosts(self):
+        self.create_user("quester")
+        next_url = "https://app.questlog.test/tasks/"
+
+        with self.settings(ALLOWED_HOSTS=["testserver", ".questlog.test"]):
+            response = self.client.post(
+                reverse("QuestLog:login"),
+                {
+                    "username": "quester",
+                    "password": "StrongPassword123!",
+                    "next": next_url,
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], next_url)
+
+    def test_login_rejects_external_redirects(self):
+        self.create_user("quester")
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "quester",
+                "password": "StrongPassword123!",
+                "next": "https://evil.example/phish",
+            },
         )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+
+    def test_login_redirects_authenticated_user_to_profile(self):
+        user = self.create_user("quester")
         self.client.force_login(user)
 
         response = self.client.get(reverse("QuestLog:login"))
@@ -271,11 +353,7 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse("QuestLog:profile"))
 
     def test_register_redirects_authenticated_user_to_profile(self):
-        user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
-            display_name="Quest Master",
-        )
+        user = self.create_user("quester")
         self.client.force_login(user)
 
         response = self.client.get(reverse("QuestLog:register"))
@@ -283,9 +361,8 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse("QuestLog:profile"))
 
     def test_profile_page_displays_logged_in_user_details(self):
-        user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
+        user = self.create_user(
+            "quester",
             display_name="Quest Master",
             email="quester@example.com",
         )
@@ -297,3 +374,23 @@ class AuthenticationFlowTests(TestCase):
         self.assertContains(response, "Quest Master")
         self.assertContains(response, "quester")
         self.assertContains(response, "quester@example.com")
+
+    def test_profile_page_handles_missing_profile_picture(self):
+        user = self.create_user("quester", display_name="Quest Master")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Quest Master")
+        self.assertNotContains(response, "profile_pictures/")
+
+    def test_profile_page_recreates_missing_profile_records(self):
+        user = self.create_user("quester", display_name="Quest Master")
+        user.profile.delete()
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
