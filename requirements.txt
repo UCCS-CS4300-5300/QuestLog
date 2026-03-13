@@ -8,3 +8,4 @@ sqlparse==0.5.5
 tzdata==2025.3
 whitenoise==6.6.0
 django-bootstrap5==26.2
+python-magic
