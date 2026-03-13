@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile
+from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party
 
 
 def get_request_hosts(request):
@@ -153,3 +153,47 @@ def profile(request):
             "profile": get_user_profile(request.user),
         },
     )
+
+def parties(request):
+    user_parties = Party.objects.none()
+    if request.user.is_authenticated:
+        user_parties = (
+            request.user.parties.all()
+            .order_by("party_name")
+        )
+
+    return render(request, 'parties.html', {"parties": user_parties})
+
+def party_details(request):
+    guid = request.GET.get("guid") or request.GET.get("party")
+    if not guid:
+        raise Http404("Party not specified.")
+
+    try:
+        party = Party.objects.prefetch_related("members").get(guid=guid)
+    except Party.DoesNotExist as e:
+        raise Http404("Party not found.") from e
+
+    if request.user.is_authenticated and not party.members.filter(pk=request.user.pk).exists():
+        raise Http404("Party not found.")
+
+    tasks_qs = (
+        Task.objects.filter(affiliation=party)
+        .select_related("owner")
+        .order_by("status", "-created_at")
+    )
+
+    return render(
+        request,
+        'party_details.html',
+        {
+            "party": party,
+            "members": party.members.all().order_by("username"),
+            "tasks": tasks_qs,
+        },
+    )
+
+def create_party(request):
+    return render(request, 'create_party.html')
+def leaderboard(request):
+    return render(request, 'leaderboard.html')
