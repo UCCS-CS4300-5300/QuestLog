@@ -23,6 +23,23 @@ def get_user_profile(user):
         user=user,
         defaults={"display_name": user.get_username()},
     )
+    user._state.fields_cache["profile"] = profile
+    return profile
+
+
+def save_user_profile(user, display_name=None, profile_picture=None):
+    profile = get_user_profile(user)
+
+    if display_name:
+        profile.display_name = display_name
+    elif not profile.display_name:
+        profile.display_name = user.get_username()
+
+    if profile_picture is not None:
+        profile.profile_picture = profile_picture
+
+    profile.save()
+    user._state.fields_cache["profile"] = profile
     return profile
 
 

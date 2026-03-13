@@ -1,10 +1,11 @@
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.http.request import split_domain_port, validate_host
+from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -13,35 +14,71 @@ from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import get_user_display_name, get_user_profile
 
 
+def get_allowed_redirect_hosts(request):
+    allowed_hosts = {host.lower() for host in settings.ALLOWED_HOSTS if host}
+    request_host = urlsplit(f"//{request.get_host()}").hostname
+    if request_host:
+        allowed_hosts.add(request_host.lower())
+    return allowed_hosts
+
+
+def host_matches_allowed_hosts(host, allowed_hosts):
+    normalized_host = (host or "").lower()
+    if not normalized_host:
+        return False
+
+    for pattern in allowed_hosts:
+        if pattern == "*":
+            return True
+        if pattern.startswith(".") and (
+            normalized_host == pattern[1:] or normalized_host.endswith(pattern)
+        ):
+            return True
+        if normalized_host == pattern:
+            return True
+
+    return False
+
+
 def get_safe_redirect(request):
     redirect_to = request.POST.get("next") or request.GET.get("next")
+    default_redirect = reverse("QuestLog:profile")
 
     if not redirect_to:
-        return reverse("QuestLog:profile")
+        return default_redirect
 
-    redirect_parts = urlsplit(redirect_to)
-    candidate_host = redirect_parts.netloc or request.get_host()
+    redirect_to = redirect_to.strip()
+    if not redirect_to or redirect_to.startswith("///"):
+        return default_redirect
 
-    if not url_has_allowed_host_and_scheme(
+    try:
+        redirect_parts = urlsplit(redirect_to)
+    except ValueError:
+        return default_redirect
+
+    if redirect_parts.netloc:
+        if not redirect_parts.scheme:
+            return default_redirect
+
+        if redirect_parts.scheme not in ("http", "https"):
+            return default_redirect
+
+        if request.is_secure() and redirect_parts.scheme != "https":
+            return default_redirect
+
+        if host_matches_allowed_hosts(redirect_parts.hostname, get_allowed_redirect_hosts(request)):
+            return redirect_to
+
+        return default_redirect
+
+    if url_has_allowed_host_and_scheme(
         redirect_to,
-        allowed_hosts={candidate_host},
+        allowed_hosts={request.get_host()},
         require_https=request.is_secure(),
     ):
-        return reverse("QuestLog:profile")
-
-    if not redirect_parts.netloc:
         return redirect_to
 
-    allowed_hosts = set(settings.ALLOWED_HOSTS)
-    current_host, _ = split_domain_port(request.get_host())
-    if current_host:
-        allowed_hosts.add(current_host)
-
-    redirect_host, _ = split_domain_port(redirect_parts.netloc)
-    if redirect_host and validate_host(redirect_host, allowed_hosts):
-        return redirect_to
-
-    return reverse("QuestLog:profile")
+    return default_redirect
 
 
 def home(request):
@@ -88,6 +125,22 @@ def register(request):
         return redirect("QuestLog:profile")
 
     return render(request, "register.html", {"form": form})
+
+
+@login_required(login_url="QuestLog:login")
+def serve_media(request, path):
+    media_root = Path(settings.MEDIA_ROOT).resolve()
+
+    try:
+        media_path = (media_root / path).resolve()
+        media_path.relative_to(media_root)
+    except ValueError as exc:
+        raise Http404("Media file not found.") from exc
+
+    if not media_path.is_file():
+        raise Http404("Media file not found.")
+
+    return FileResponse(media_path.open("rb"))
 
 
 @login_required(login_url="QuestLog:login")

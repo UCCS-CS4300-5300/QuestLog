@@ -7,8 +7,9 @@ import tempfile
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
-from django.urls import Resolver404, clear_url_caches, resolve, reverse
+from django.urls import clear_url_caches, resolve, reverse
 
+from .forms import QuestLogUserCreationForm
 from .models import UserProfile, get_user_profile
 from .urls import urlpatterns
 
@@ -158,11 +159,11 @@ class UrlConfigurationTests(SimpleTestCase):
         clear_url_caches()
         return importlib.reload(importlib.import_module("config.urls"))
 
-    def test_media_urls_are_not_served_when_debug_is_disabled(self):
+    def test_media_urls_are_served_by_protected_view_when_debug_is_disabled(self):
         with self.settings(DEBUG=False):
             urlconf = self.reload_urlconf()
-            with self.assertRaises(Resolver404):
-                resolve("/media/profile_pictures/avatar.gif", urlconf=urlconf)
+            match = resolve("/media/profile_pictures/avatar.gif", urlconf=urlconf)
+            self.assertEqual(match.url_name, "media")
 
         self.reload_urlconf()
 
@@ -181,11 +182,11 @@ class UserProfileTests(TestCase):
 
     def test_create_user_creates_profile_with_default_display_name(self):
         user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
+            username="liljit",
+            password="6767676767676767",
         )
 
-        self.assertEqual(user.profile.display_name, "quester")
+        self.assertEqual(user.profile.display_name, "liljit")
         self.assertEqual(
             user.profile._meta.get_field("profile_picture").upload_to,
             "profile_pictures/",
@@ -193,16 +194,17 @@ class UserProfileTests(TestCase):
 
     def test_string_representation_prefers_display_name(self):
         user = get_user_model().objects.create_user(
-            username="quester",
-            password="StrongPassword123!",
+            username="liljit",
+            password="6767676767676767",
         )
-        user.profile.display_name = "Quest Master"
+        user.profile.display_name = "liljitdisplay"
         user.profile.save()
 
-        self.assertEqual(str(user.profile), "Quest Master")
+        self.assertEqual(str(user.profile), "liljitdisplay")
 
 
 class AuthenticationFlowTests(TestCase):
+    VALID_PASSWORD = "LilJitsPass67"
     TEST_IMAGE_BYTES = (
         b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
         b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
@@ -218,6 +220,10 @@ class AuthenticationFlowTests(TestCase):
         self.settings_override.disable()
         shutil.rmtree(self.temp_media_root, ignore_errors=True)
 
+    def reload_urlconf(self):
+        clear_url_caches()
+        return importlib.reload(importlib.import_module("config.urls"))
+
     def make_profile_picture(self):
         return SimpleUploadedFile(
             "avatar.gif",
@@ -228,8 +234,8 @@ class AuthenticationFlowTests(TestCase):
     def create_user(
         self,
         username,
-        password="StrongPassword123!",
-        display_name="Quest Master",
+        password=VALID_PASSWORD,
+        display_name="liljitdisplay",
         email="",
         profile_picture=None,
     ):
@@ -240,7 +246,7 @@ class AuthenticationFlowTests(TestCase):
         )
         profile = get_user_profile(user)
         profile.display_name = display_name
-        if profile_picture:
+        if profile_picture is not None:
             profile.profile_picture = profile_picture
         profile.save()
         return user
@@ -249,20 +255,20 @@ class AuthenticationFlowTests(TestCase):
         response = self.client.post(
             reverse("QuestLog:register"),
             {
-                "display_name": "Quest Master",
-                "username": "quester",
-                "email": "quester@example.com",
+                "display_name": "liljitdisplay",
+                "username": "liljit",
+                "email": "liljit@example.com",
                 "profile_picture": self.make_profile_picture(),
-                "password1": "StrongPassword123!",
-                "password2": "StrongPassword123!",
+                "password1": self.VALID_PASSWORD,
+                "password2": self.VALID_PASSWORD,
             },
         )
 
-        user = get_user_model().objects.get(username="quester")
+        user = get_user_model().objects.get(username="liljit")
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
-        self.assertEqual(user.profile.display_name, "Quest Master")
-        self.assertEqual(user.email, "quester@example.com")
+        self.assertEqual(user.profile.display_name, "liljitdisplay")
+        self.assertEqual(user.email, "liljit@example.com")
         self.assertTrue(user.profile.profile_picture.name.startswith("profile_pictures/"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
@@ -270,28 +276,28 @@ class AuthenticationFlowTests(TestCase):
         response = self.client.post(
             reverse("QuestLog:register"),
             {
-                "display_name": "Quest Master",
-                "username": "quester",
-                "email": "quester@example.com",
-                "password1": "StrongPassword123!",
-                "password2": "StrongPassword123!",
+                "display_name": "liljitdisplay",
+                "username": "liljit",
+                "email": "liljit@example.com",
+                "password1": self.VALID_PASSWORD,
+                "password2": self.VALID_PASSWORD,
             },
         )
 
-        user = get_user_model().objects.get(username="quester")
+        user = get_user_model().objects.get(username="liljit")
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
-        self.assertEqual(user.profile.display_name, "Quest Master")
+        self.assertEqual(user.profile.display_name, "liljitdisplay")
         self.assertFalse(user.profile.profile_picture.name)
 
     def test_login_authenticates_existing_user(self):
-        user = self.create_user("quester")
+        user = self.create_user("liljit")
 
         response = self.client.post(
             reverse("QuestLog:login"),
             {
-                "username": "quester",
-                "password": "StrongPassword123!",
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
             },
         )
 
@@ -299,13 +305,13 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
     def test_login_uses_safe_next_redirect(self):
-        user = self.create_user("quester")
+        user = self.create_user("liljit")
 
         response = self.client.post(
             reverse("QuestLog:login"),
             {
-                "username": "quester",
-                "password": "StrongPassword123!",
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
                 "next": reverse("QuestLog:tasks"),
             },
         )
@@ -314,15 +320,15 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
     def test_login_allows_redirects_to_configured_hosts(self):
-        self.create_user("quester")
+        self.create_user("liljit")
         next_url = "https://app.questlog.test/tasks/"
 
         with self.settings(ALLOWED_HOSTS=["testserver", ".questlog.test"]):
             response = self.client.post(
                 reverse("QuestLog:login"),
                 {
-                    "username": "quester",
-                    "password": "StrongPassword123!",
+                    "username": "liljit",
+                    "password": self.VALID_PASSWORD,
                     "next": next_url,
                 },
             )
@@ -331,21 +337,49 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(response["Location"], next_url)
 
     def test_login_rejects_external_redirects(self):
-        self.create_user("quester")
+        self.create_user("liljit")
 
         response = self.client.post(
             reverse("QuestLog:login"),
             {
-                "username": "quester",
-                "password": "StrongPassword123!",
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
                 "next": "https://evil.example/phish",
             },
         )
 
         self.assertRedirects(response, reverse("QuestLog:profile"))
 
+    def test_login_rejects_invalid_redirect_schemes(self):
+        self.create_user("liljit")
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
+                "next": "javascript:alert('xss')",
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+
+    def test_login_rejects_scheme_relative_redirects(self):
+        self.create_user("liljit")
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
+                "next": "//evil.com/phish",
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
+
     def test_login_redirects_authenticated_user_to_profile(self):
-        user = self.create_user("quester")
+        user = self.create_user("liljit")
         self.client.force_login(user)
 
         response = self.client.get(reverse("QuestLog:login"))
@@ -353,7 +387,7 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse("QuestLog:profile"))
 
     def test_register_redirects_authenticated_user_to_profile(self):
-        user = self.create_user("quester")
+        user = self.create_user("liljit")
         self.client.force_login(user)
 
         response = self.client.get(reverse("QuestLog:register"))
@@ -362,31 +396,31 @@ class AuthenticationFlowTests(TestCase):
 
     def test_profile_page_displays_logged_in_user_details(self):
         user = self.create_user(
-            "quester",
-            display_name="Quest Master",
-            email="quester@example.com",
+            "liljit",
+            display_name="liljitdisplay",
+            email="liljit@example.com",
         )
         self.client.force_login(user)
 
         response = self.client.get(reverse("QuestLog:profile"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Quest Master")
-        self.assertContains(response, "quester")
-        self.assertContains(response, "quester@example.com")
+        self.assertContains(response, "liljitdisplay")
+        self.assertContains(response, "liljit")
+        self.assertContains(response, "liljit@example.com")
 
     def test_profile_page_handles_missing_profile_picture(self):
-        user = self.create_user("quester", display_name="Quest Master")
+        user = self.create_user("liljit", display_name="liljitdisplay")
         self.client.force_login(user)
 
         response = self.client.get(reverse("QuestLog:profile"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Quest Master")
+        self.assertContains(response, "liljitdisplay")
         self.assertNotContains(response, "profile_pictures/")
 
     def test_profile_page_recreates_missing_profile_records(self):
-        user = self.create_user("quester", display_name="Quest Master")
+        user = self.create_user("liljit", display_name="liljitdisplay")
         user.profile.delete()
         self.client.force_login(user)
 
@@ -394,3 +428,61 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
+
+    def test_production_media_requires_authentication(self):
+        user = self.create_user("liljit", profile_picture=self.make_profile_picture())
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(user.profile.profile_picture.url)
+
+        self.assertRedirects(
+            response,
+            f"{reverse('QuestLog:login')}?next={user.profile.profile_picture.url}",
+        )
+        self.reload_urlconf()
+
+    def test_production_media_serves_profile_picture_for_authenticated_user(self):
+        user = self.create_user("liljit", profile_picture=self.make_profile_picture())
+        self.client.force_login(user)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(user.profile.profile_picture.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
+        self.reload_urlconf()
+
+    def test_production_media_rejects_path_traversal(self):
+        user = self.create_user("liljit")
+        self.client.force_login(user)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get("/media/../config/settings.py")
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
+    def test_user_creation_form_save_commit_false_creates_profile_on_save(self):
+        form = QuestLogUserCreationForm(
+            data={
+                "display_name": "liljitdisplay",
+                "username": "liljit",
+                "email": "liljit@example.com",
+                "password1": self.VALID_PASSWORD,
+                "password2": self.VALID_PASSWORD,
+            },
+            files={"profile_picture": self.make_profile_picture()},
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+        user = form.save(commit=False)
+        self.assertIsNone(user.pk)
+        user.save()
+
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
+        self.assertEqual(user.profile.display_name, "liljitdisplay")
+        self.assertTrue(user.profile.profile_picture.name.startswith("profile_pictures/"))
