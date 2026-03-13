@@ -69,3 +69,5 @@ def validate_image_file(file):
         img.verify()  # raises exception if file is not a valid image
     except Exception:
         raise ValidationError("Invalid image file")
+    file.seek(0)
+    

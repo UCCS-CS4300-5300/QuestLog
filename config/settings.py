@@ -150,4 +150,4 @@ STORAGES = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-AUTH_USER_MODEL = "questlog.User"
+# AUTH_USER_MODEL = "questlog.User"

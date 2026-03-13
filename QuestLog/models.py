@@ -1,13 +1,14 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+# from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from .utilities import *
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 import uuid
 
 
-class User(AbstractUser):
-    display_name = models.CharField(max_length=100,blank=True,null=True)
+# class User(AbstractUser):
+#     display_name = models.CharField(max_length=100,blank=True,null=True)
+    
 
 class Reward(models.Model):
     class_attributes = models.CharField(default="To be determined",max_length=100)
@@ -15,10 +16,15 @@ class Reward(models.Model):
 
 
 class PartySecret(models.Model):
-    name = models.CharField(max_length=50)
-    secret_hash = models.CharField(max_length=64, editable=False) #We want to change the password 
+    # name = models.CharField(max_length=50)
+    _secret_hash = models.CharField(max_length=128, editable=False) 
+
     def set_secret(self, raw_secret):
-        self.secret_hash = make_password(raw_secret) #salt included
+        self.__secret_hash = make_password(raw_secret) 
+
+    def check_secret(self,raw_secret):
+        check_password(raw_secret,self.__secret_hash)
+
 
 class Party(models.Model):
     guid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
