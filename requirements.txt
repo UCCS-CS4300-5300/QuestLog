@@ -3,6 +3,7 @@ behave-django==1.9.0
 Django==6.0.2
 gunicorn==25.1.0
 packaging==26.0
+Pillow==12.1.1
 sqlparse==0.5.5
 tzdata==2025.3
 whitenoise==6.6.0

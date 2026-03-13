@@ -8,15 +8,24 @@
             <div class="card">
                 <div class="card-body text-center">
 
-                    <!--pfp image (placeholder tho) -->
-                    <img  src="https://via.placeholder.com/100"
-                          class="rounded-circle mb-3"
-                          alt="Profile Picture" >
+                    {% if profile.profile_picture %}
+                        <img  src="{{ profile.profile_picture.url }}"
+                              class="rounded-circle mb-3"
+                              alt="{{ profile.display_name|default:profile_user.username }} profile picture"
+                              style="width: 120px; height: 120px; object-fit: cover;">
+                    {% else %}
+                        <div class="bg-secondary-subtle rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                             style="width: 120px; height: 120px;">
+                            <span class="fs-2 fw-bold text-secondary">
+                                {{ profile.display_name|default:profile_user.username|first|upper }}
+                            </span>
+                        </div>
+                    {% endif %}
 
-                    <h1 class="h3" >Profile</h1>
+                    <h1 class="h3" >{{ profile.display_name|default:profile_user.username }}</h1>
 
                     <p class="text-muted mb-4">
-                        Basic user profile preview
+                        Quest Log profile
                     </p>
 
                     <div class="text-start mb-4" >
@@ -24,10 +33,14 @@
                         <h5>Account Information</h5>
 
                         <p>
-                            <strong>Username:</strong> DemoUser
+                            <strong>Display Name:</strong> {{ profile.display_name|default:profile_user.username }}
+                        </p>
+
+                        <p>
+                            <strong>Username:</strong> {{ profile_user.username }}
                         </p>
                         <p>
-                            <strong>Email:</strong> demo@example.com
+                            <strong>Email:</strong> {{ profile_user.email|default:"Not provided" }}
                         </p>
 
                     </div>

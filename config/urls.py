@@ -14,10 +14,22 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path
+
+from QuestLog import views as questlog_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('QuestLog.urls')),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    media_route = settings.MEDIA_URL.lstrip("/")
+    urlpatterns += [
+        path(f"{media_route}<path:path>", questlog_views.serve_media, name="media"),
+    ]

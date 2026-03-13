@@ -1,5 +1,5 @@
-
 {% extends 'base.html' %}
+{% load django_bootstrap5 %}
 {% block title %} Register | Quest Log {% endblock %}
 
 {% block content %}
@@ -16,40 +16,9 @@
                     <h1 class="h3 mb-4" >Create Account</h1>
 
 
-                    <form>
-
-                        <!-- user name-->
-                        <div class="mb-3" >
-                            <label for="username" class="form-label" >Username</label>
-                            <input  type="text"   class="form-control"   id="username"
-                                    placeholder="Choose a username">
-                        </div>
-
-
-                        <!--mail-->
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input type="email"  class="form-control" id="email"
-                                   placeholder="Enter your email">
-                        </div>
-
-
-                        <!--pass-->
-                        <div class="mb-3" >
-                            <label for="password1" class="form-label">Password</label>
-                            <input type="password"   class="form-control"
-                                   id="password1"  placeholder="Create a password">
-                        </div>
-
-
-                        <!--confirm info-->
-                        <div class="mb-3">
-                            <label for="password2" class="form-label" >Confirm Password</label>
-                            <input type="password" class="form-control"
-                                   id="password2"  placeholder="Confirm your password">
-                        </div>
-
-
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        {% bootstrap_form form %}
                         <button  type="submit"
                                 class="btn btn-success w-100">
                                 Create Account
