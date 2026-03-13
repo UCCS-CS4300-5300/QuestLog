@@ -3,11 +3,14 @@ import os
 import shutil
 import sys
 import tempfile
+from io import BytesIO
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
+from PIL import Image
 
 from .forms import QuestLogUserCreationForm
 from .models import UserProfile, get_user_profile, profile_picture_upload_to
@@ -231,6 +234,22 @@ class AuthenticationFlowTests(TestCase):
             content_type="image/gif",
         )
 
+    def make_large_profile_picture(self):
+        return SimpleUploadedFile(
+            "avatar.gif",
+            self.TEST_IMAGE_BYTES + (b"x" * settings.MAX_PROFILE_PICTURE_SIZE),
+            content_type="image/gif",
+        )
+
+    def make_bmp_profile_picture(self):
+        buffer = BytesIO()
+        Image.new("RGB", (1, 1), color="red").save(buffer, format="BMP")
+        return SimpleUploadedFile(
+            "avatar.bmp",
+            buffer.getvalue(),
+            content_type="image/bmp",
+        )
+
     def create_user(
         self,
         username,
@@ -325,7 +344,10 @@ class AuthenticationFlowTests(TestCase):
         self.create_user("liljit")
         next_url = "https://app.questlog.test/tasks/"
 
-        with self.settings(ALLOWED_HOSTS=["testserver", ".questlog.test"]):
+        with self.settings(
+            ALLOWED_HOSTS=["testserver"],
+            REDIRECT_ALLOWED_HOSTS=["app.questlog.test"],
+        ):
             response = self.client.post(
                 reverse("QuestLog:login"),
                 {
@@ -337,6 +359,21 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], next_url)
+
+    def test_login_rejects_absolute_redirects_when_allowed_hosts_is_wildcard(self):
+        self.create_user("liljit")
+
+        with self.settings(ALLOWED_HOSTS=["*"], REDIRECT_ALLOWED_HOSTS=[]):
+            response = self.client.post(
+                reverse("QuestLog:login"),
+                {
+                    "username": "liljit",
+                    "password": self.VALID_PASSWORD,
+                    "next": "https://attacker.com/phish",
+                },
+            )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
 
     def test_login_rejects_external_redirects(self):
         self.create_user("liljit")
@@ -485,6 +522,20 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.reload_urlconf()
 
+    def test_production_media_rejects_case_changed_profile_picture_paths(self):
+        user = self.create_user("liljit", profile_picture=self.make_profile_picture())
+        profile = get_user_profile(user)
+        self.client.force_login(user)
+
+        altered_url = f"/media/{profile.profile_picture.name.upper()}"
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(altered_url)
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
     def test_production_media_rejects_path_traversal(self):
         user = self.create_user("liljit")
         self.client.force_login(user)
@@ -520,3 +571,35 @@ class AuthenticationFlowTests(TestCase):
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
         self.assertEqual(profile.display_name, "liljitdisplay")
         self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
+
+    def test_user_creation_form_rejects_large_profile_pictures(self):
+        form = QuestLogUserCreationForm(
+            data={
+                "display_name": "liljitdisplay",
+                "username": "liljit",
+                "email": "liljit@example.com",
+                "password1": self.VALID_PASSWORD,
+                "password2": self.VALID_PASSWORD,
+            },
+            files={"profile_picture": self.make_large_profile_picture()},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Profile pictures must be 5 MB or smaller.", form.errors["profile_picture"])
+
+    def test_user_creation_form_rejects_unsupported_profile_picture_content_types(self):
+        form = QuestLogUserCreationForm(
+            data={
+                "display_name": "liljitdisplay",
+                "username": "liljit",
+                "email": "liljit@example.com",
+                "password1": self.VALID_PASSWORD,
+                "password2": self.VALID_PASSWORD,
+            },
+            files={
+                "profile_picture": self.make_bmp_profile_picture()
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Unsupported profile picture file type.", form.errors["profile_picture"])

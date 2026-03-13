@@ -37,6 +37,7 @@ MANAGEMENT_COMMANDS = set(sys.argv[1:])
 RUNNING_TESTS = bool({"test", "behave"} & MANAGEMENT_COMMANDS)
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+REDIRECT_ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -137,6 +138,13 @@ STATICFILES_DIRS = [
 ]
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
+ALLOWED_PROFILE_PICTURE_CONTENT_TYPES = {
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',

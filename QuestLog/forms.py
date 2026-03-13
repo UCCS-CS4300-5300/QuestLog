@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
@@ -43,6 +44,25 @@ class QuestLogUserCreationForm(UserCreationForm):
             display_name=self.cleaned_data["display_name"],
             profile_picture=self.cleaned_data.get("profile_picture"),
         )
+
+    def clean_profile_picture(self):
+        profile_picture = self.cleaned_data.get("profile_picture")
+        if not profile_picture:
+            return profile_picture
+
+        original_upload = self.files.get("profile_picture") or profile_picture
+
+        if original_upload.size > settings.MAX_PROFILE_PICTURE_SIZE:
+            raise forms.ValidationError("Profile pictures must be 5 MB or smaller.")
+
+        image = getattr(profile_picture, "image", None)
+        content_type = image.get_format_mimetype() if image else ""
+        if not content_type:
+            content_type = getattr(original_upload, "content_type", "")
+        if content_type and content_type not in settings.ALLOWED_PROFILE_PICTURE_CONTENT_TYPES:
+            raise forms.ValidationError("Unsupported profile picture file type.")
+
+        return profile_picture
 
 
 class QuestLogAuthenticationForm(AuthenticationForm):

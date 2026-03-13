@@ -1,5 +1,6 @@
-from pathlib import Path
-from urllib.parse import urlsplit
+from pathlib import Path, PurePosixPath
+from secrets import compare_digest
+from urllib.parse import unquote, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
@@ -8,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.utils.http import escape_leading_slashes, is_same_domain, url_has_allowed_host_and_scheme
+from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import get_user_display_name, get_user_profile
@@ -17,11 +18,17 @@ from .models import get_user_display_name, get_user_profile
 def get_redirect_allowed_hosts(request):
     request_host = request.get_host()
     request_hostname = urlsplit(f"//{request_host}").hostname
-    allowed_patterns = {host for host in settings.ALLOWED_HOSTS if host}
-    exact_hosts = {request_host}
+    exact_hosts = {request_host.lower()}
     if request_hostname:
-        exact_hosts.add(request_hostname)
-    return exact_hosts, allowed_patterns
+        exact_hosts.add(request_hostname.lower())
+
+    configured_hosts = getattr(settings, "REDIRECT_ALLOWED_HOSTS", [])
+    exact_hosts.update(
+        host.lower()
+        for host in configured_hosts
+        if host and host != "*" and not host.startswith(".")
+    )
+    return exact_hosts
 
 
 def get_safe_redirect(request):
@@ -36,30 +43,16 @@ def get_safe_redirect(request):
         return default_redirect
 
     try:
-        redirect_parts = urlsplit(redirect_to)
+        urlsplit(redirect_to)
     except ValueError:
         return default_redirect
 
-    exact_hosts, allowed_patterns = get_redirect_allowed_hosts(request)
     if url_has_allowed_host_and_scheme(
         redirect_to,
-        allowed_hosts=exact_hosts,
+        allowed_hosts=get_redirect_allowed_hosts(request),
         require_https=request.is_secure(),
     ):
         return escape_leading_slashes(redirect_to)
-
-    redirect_host = redirect_parts.hostname
-    if (
-        redirect_parts.scheme
-        and redirect_host
-        and any(pattern == "*" or is_same_domain(redirect_host, pattern) for pattern in allowed_patterns)
-        and url_has_allowed_host_and_scheme(
-            redirect_to,
-            allowed_hosts={redirect_host, redirect_parts.netloc},
-            require_https=request.is_secure(),
-        )
-    ):
-        return redirect_to
 
     return default_redirect
 
@@ -113,13 +106,23 @@ def register(request):
 @login_required(login_url="QuestLog:login")
 def serve_media(request, path):
     user_profile = get_user_profile(request.user)
-    if not user_profile.profile_picture or path != user_profile.profile_picture.name:
+    if not user_profile.profile_picture:
+        raise Http404("Media file not found.")
+
+    normalized_request_path = PurePosixPath(
+        "/" + unquote(path).replace("\\", "/")
+    ).as_posix().lstrip("/")
+    normalized_profile_path = PurePosixPath(
+        "/" + user_profile.profile_picture.name.replace("\\", "/")
+    ).as_posix().lstrip("/")
+
+    if not compare_digest(normalized_request_path, normalized_profile_path):
         raise Http404("Media file not found.")
 
     media_root = Path(settings.MEDIA_ROOT).resolve()
 
     try:
-        media_path = (media_root / path).resolve()
+        media_path = (media_root / normalized_request_path).resolve()
         media_path.relative_to(media_root)
     except ValueError as exc:
         raise Http404("Media file not found.") from exc
