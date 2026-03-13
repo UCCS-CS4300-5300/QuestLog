@@ -26,6 +26,11 @@ EXPECTED_VIEW_STATUSES = {
     "login": 200,
     "register": 200,
     "profile": 302,
+    'parties': 200,
+    'party_details':404, #intil we populate the persistent test database
+    'leaderboard': 200,
+    'create_party': 200
+
 }
 
 

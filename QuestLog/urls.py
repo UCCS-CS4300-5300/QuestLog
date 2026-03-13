@@ -11,4 +11,11 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('register/', views.register, name='register'),
     path('profile/', views.profile, name='profile'),
+
+    # path('create_task/', views.create_task, name='create_task'),
+    path('parties/', views.parties, name='parties'), #join lives here
+    path('party_details/', views.party_details, name='party_details'), #MAY NEED TO BE /parties/guid/ 
+    path('leaderboard/', views.leaderboard, name='leaderboard'),
+    path('create_party/', views.create_party, name='create_party'),
+
 ]

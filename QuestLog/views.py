@@ -162,7 +162,7 @@ def parties(request):
             .order_by("party_name")
         )
 
-    return render(request, 'parties.html', {"parties": user_parties})
+    return render(request, 'parties.html', {"Questlog:parties": user_parties})
 
 def party_details(request):
     guid = request.GET.get("guid") or request.GET.get("party")
