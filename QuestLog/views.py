@@ -14,13 +14,17 @@ from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile
 
 
-def get_redirect_allowed_hosts(request):
+def get_request_hosts(request):
     request_host = request.get_host()
     request_hostname = urlsplit(f"//{request_host}").hostname
     exact_hosts = {request_host.lower()}
     if request_hostname:
         exact_hosts.add(request_hostname.lower())
+    return exact_hosts
 
+
+def get_redirect_allowed_hosts(request):
+    exact_hosts = get_request_hosts(request)
     configured_hosts = getattr(settings, "REDIRECT_ALLOWED_HOSTS", [])
     exact_hosts.update(
         host.lower()
@@ -46,7 +50,12 @@ def get_safe_redirect(request):
     except ValueError:
         return default_redirect
 
-    if redirect_parts.netloc and redirect_parts.scheme != "https":
+    redirect_host = redirect_parts.netloc.lower()
+    redirect_hostname = (redirect_parts.hostname or "").lower()
+    request_hosts = get_request_hosts(request)
+    is_same_host_redirect = redirect_host in request_hosts or redirect_hostname in request_hosts
+
+    if redirect_parts.netloc and not is_same_host_redirect and redirect_parts.scheme != "https":
         return default_redirect
 
     if url_has_allowed_host_and_scheme(
@@ -113,6 +122,10 @@ def normalize_media_path(path):
 
 def serve_media(request, path):
     normalized_request_path = normalize_media_path(path)
+    path_parts = PurePosixPath(normalized_request_path).parts
+    if len(path_parts) < 2 or path_parts[0] != "profile_pictures":
+        raise Http404("Media file not found.")
+
     if not UserProfile.objects.filter(profile_picture=normalized_request_path).exists():
         raise Http404("Media file not found.")
 

@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import tempfile
+from contextlib import contextmanager
 from io import BytesIO
 
 from django.conf import settings
@@ -223,6 +224,28 @@ class AuthenticationFlowTests(TestCase):
         self.settings_override.disable()
         shutil.rmtree(self.temp_media_root, ignore_errors=True)
 
+    @contextmanager
+    def without_profile_picture_settings(self):
+        wrapped_settings = settings._wrapped
+        sentinel = object()
+        originals = {}
+        setting_names = ("MAX_PROFILE_PICTURE_SIZE", "ALLOWED_PROFILE_PICTURE_FORMATS")
+
+        for setting_name in setting_names:
+            originals[setting_name] = getattr(wrapped_settings, setting_name, sentinel)
+            if originals[setting_name] is not sentinel:
+                delattr(wrapped_settings, setting_name)
+
+        try:
+            yield
+        finally:
+            for setting_name, original_value in originals.items():
+                if original_value is sentinel:
+                    if hasattr(wrapped_settings, setting_name):
+                        delattr(wrapped_settings, setting_name)
+                else:
+                    setattr(wrapped_settings, setting_name, original_value)
+
     def reload_urlconf(self):
         clear_url_caches()
         return importlib.reload(importlib.import_module("config.urls"))
@@ -360,6 +383,23 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], next_url)
+
+    def test_login_allows_same_host_absolute_http_redirects_on_insecure_requests(self):
+        user = self.create_user("liljit")
+        next_url = "http://testserver/tasks/"
+
+        response = self.client.post(
+            reverse("QuestLog:login"),
+            {
+                "username": "liljit",
+                "password": self.VALID_PASSWORD,
+                "next": next_url,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], next_url)
+        self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
     def test_login_rejects_insecure_redirects_to_configured_hosts(self):
         self.create_user("liljit")
@@ -553,6 +593,24 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.reload_urlconf()
 
+    def test_production_media_rejects_non_profile_picture_directories(self):
+        user = self.create_user("liljit")
+        profile = get_user_profile(user)
+        os.makedirs(os.path.join(self.temp_media_root, "some_other_dir"), exist_ok=True)
+        secret_path = os.path.join(self.temp_media_root, "some_other_dir", "secret.txt")
+        with open(secret_path, "wb") as secret_file:
+            secret_file.write(b"private")
+
+        profile.profile_picture.name = "some_other_dir/secret.txt"
+        profile.save(update_fields=["profile_picture"])
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get("/media/some_other_dir/secret.txt")
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
     def test_production_media_rejects_case_changed_profile_picture_paths(self):
         user = self.create_user("liljit", profile_picture=self.make_profile_picture())
         profile = get_user_profile(user)
@@ -634,6 +692,21 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("Unsupported profile picture file type.", form.errors["profile_picture"])
+
+    def test_user_creation_form_uses_defaults_when_profile_picture_settings_are_missing(self):
+        with self.without_profile_picture_settings():
+            form = QuestLogUserCreationForm(
+                data={
+                    "display_name": "liljitdisplay",
+                    "username": "fallbackuser",
+                    "email": "fallback@example.com",
+                    "password1": self.VALID_PASSWORD,
+                    "password2": self.VALID_PASSWORD,
+                },
+                files={"profile_picture": self.make_profile_picture()},
+            )
+
+            self.assertTrue(form.is_valid(), form.errors)
 
     def test_user_creation_form_rejects_non_image_payloads_with_image_content_types(self):
         form = QuestLogUserCreationForm(

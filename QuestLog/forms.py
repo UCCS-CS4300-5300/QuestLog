@@ -6,6 +6,34 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from .models import save_user_profile
 
 User = get_user_model()
+DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
+DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS = frozenset({"GIF", "JPEG", "PNG", "WEBP"})
+
+
+def get_max_profile_picture_size():
+    configured_size = getattr(
+        settings,
+        "MAX_PROFILE_PICTURE_SIZE",
+        DEFAULT_MAX_PROFILE_PICTURE_SIZE,
+    )
+    if not isinstance(configured_size, int) or configured_size <= 0:
+        return DEFAULT_MAX_PROFILE_PICTURE_SIZE
+    return configured_size
+
+
+def get_allowed_profile_picture_formats():
+    configured_formats = getattr(
+        settings,
+        "ALLOWED_PROFILE_PICTURE_FORMATS",
+        DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS,
+    )
+    try:
+        normalized_formats = {str(image_format).upper() for image_format in configured_formats}
+    except TypeError:
+        return DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS
+
+    normalized_formats.discard("")
+    return normalized_formats or DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS
 
 
 class QuestLogUserCreationForm(UserCreationForm):
@@ -50,12 +78,12 @@ class QuestLogUserCreationForm(UserCreationForm):
         if not profile_picture:
             return profile_picture
 
-        if profile_picture.size > settings.MAX_PROFILE_PICTURE_SIZE:
+        if profile_picture.size > get_max_profile_picture_size():
             raise forms.ValidationError("Profile pictures must be 5 MB or smaller.")
 
         image = getattr(profile_picture, "image", None)
         image_format = getattr(image, "format", "")
-        if image_format not in settings.ALLOWED_PROFILE_PICTURE_FORMATS:
+        if image_format not in get_allowed_profile_picture_formats():
             raise forms.ValidationError("Unsupported profile picture file type.")
 
         return profile_picture
