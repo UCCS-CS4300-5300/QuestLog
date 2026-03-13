@@ -1,5 +1,4 @@
 from pathlib import Path, PurePosixPath
-from secrets import compare_digest
 from urllib.parse import unquote, urlsplit
 
 from django.conf import settings
@@ -12,7 +11,7 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import get_user_display_name, get_user_profile
+from .models import UserProfile, get_user_display_name, get_user_profile
 
 
 def get_redirect_allowed_hosts(request):
@@ -43,8 +42,11 @@ def get_safe_redirect(request):
         return default_redirect
 
     try:
-        urlsplit(redirect_to)
+        redirect_parts = urlsplit(redirect_to)
     except ValueError:
+        return default_redirect
+
+    if redirect_parts.netloc and redirect_parts.scheme != "https":
         return default_redirect
 
     if url_has_allowed_host_and_scheme(
@@ -103,20 +105,15 @@ def register(request):
     return render(request, "register.html", {"form": form})
 
 
-@login_required(login_url="QuestLog:login")
-def serve_media(request, path):
-    user_profile = get_user_profile(request.user)
-    if not user_profile.profile_picture:
-        raise Http404("Media file not found.")
-
-    normalized_request_path = PurePosixPath(
+def normalize_media_path(path):
+    return PurePosixPath(
         "/" + unquote(path).replace("\\", "/")
     ).as_posix().lstrip("/")
-    normalized_profile_path = PurePosixPath(
-        "/" + user_profile.profile_picture.name.replace("\\", "/")
-    ).as_posix().lstrip("/")
 
-    if not compare_digest(normalized_request_path, normalized_profile_path):
+
+def serve_media(request, path):
+    normalized_request_path = normalize_media_path(path)
+    if not UserProfile.objects.filter(profile_picture=normalized_request_path).exists():
         raise Http404("Media file not found.")
 
     media_root = Path(settings.MEDIA_ROOT).resolve()

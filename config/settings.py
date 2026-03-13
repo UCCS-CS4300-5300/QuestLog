@@ -139,11 +139,11 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
-ALLOWED_PROFILE_PICTURE_CONTENT_TYPES = {
-    "image/gif",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
+ALLOWED_PROFILE_PICTURE_FORMATS = {
+    "GIF",
+    "JPEG",
+    "PNG",
+    "WEBP",
 }
 STORAGES = {
     'default': {

@@ -355,10 +355,29 @@ class AuthenticationFlowTests(TestCase):
                     "password": self.VALID_PASSWORD,
                     "next": next_url,
                 },
+                secure=True,
             )
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], next_url)
+
+    def test_login_rejects_insecure_redirects_to_configured_hosts(self):
+        self.create_user("liljit")
+
+        with self.settings(
+            ALLOWED_HOSTS=["testserver"],
+            REDIRECT_ALLOWED_HOSTS=["app.questlog.test"],
+        ):
+            response = self.client.post(
+                reverse("QuestLog:login"),
+                {
+                    "username": "liljit",
+                    "password": self.VALID_PASSWORD,
+                    "next": "http://app.questlog.test/tasks/",
+                },
+            )
+
+        self.assertRedirects(response, reverse("QuestLog:profile"))
 
     def test_login_rejects_absolute_redirects_when_allowed_hosts_is_wildcard(self):
         self.create_user("liljit")
@@ -482,7 +501,7 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
 
-    def test_production_media_requires_authentication(self):
+    def test_production_media_serves_profile_picture_for_anonymous_users(self):
         user = self.create_user("liljit", profile_picture=self.make_profile_picture())
         profile = get_user_profile(user)
 
@@ -490,10 +509,8 @@ class AuthenticationFlowTests(TestCase):
             self.reload_urlconf()
             response = self.client.get(profile.profile_picture.url)
 
-        self.assertRedirects(
-            response,
-            f"{reverse('QuestLog:login')}?next={profile.profile_picture.url}",
-        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
         self.reload_urlconf()
 
     def test_production_media_serves_profile_picture_for_authenticated_user(self):
@@ -509,7 +526,7 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
         self.reload_urlconf()
 
-    def test_production_media_rejects_other_users_profile_pictures(self):
+    def test_production_media_serves_profile_picture_for_other_authenticated_users(self):
         owner = self.create_user("liljit", profile_picture=self.make_profile_picture())
         intruder = self.create_user("otherliljit")
         owner_profile = get_user_profile(owner)
@@ -518,6 +535,20 @@ class AuthenticationFlowTests(TestCase):
         with self.settings(DEBUG=False):
             self.reload_urlconf()
             response = self.client.get(owner_profile.profile_picture.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
+        self.reload_urlconf()
+
+    def test_production_media_rejects_orphaned_profile_picture_files(self):
+        os.makedirs(os.path.join(self.temp_media_root, "profile_pictures"), exist_ok=True)
+        orphan_path = os.path.join(self.temp_media_root, "profile_pictures", "orphan.gif")
+        with open(orphan_path, "wb") as orphan_file:
+            orphan_file.write(self.TEST_IMAGE_BYTES)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get("/media/profile_pictures/orphan.gif")
 
         self.assertEqual(response.status_code, 404)
         self.reload_urlconf()
@@ -603,3 +634,26 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("Unsupported profile picture file type.", form.errors["profile_picture"])
+
+    def test_user_creation_form_rejects_non_image_payloads_with_image_content_types(self):
+        form = QuestLogUserCreationForm(
+            data={
+                "display_name": "liljitdisplay",
+                "username": "notanimage",
+                "email": "notanimage@example.com",
+                "password1": self.VALID_PASSWORD,
+                "password2": self.VALID_PASSWORD,
+            },
+            files={
+                "profile_picture": SimpleUploadedFile(
+                    "avatar.png",
+                    b"this is not a real image",
+                    content_type="image/png",
+                )
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertTrue(
+            any("Upload a valid image" in error for error in form.errors["profile_picture"])
+        )

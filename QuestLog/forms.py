@@ -50,16 +50,12 @@ class QuestLogUserCreationForm(UserCreationForm):
         if not profile_picture:
             return profile_picture
 
-        original_upload = self.files.get("profile_picture") or profile_picture
-
-        if original_upload.size > settings.MAX_PROFILE_PICTURE_SIZE:
+        if profile_picture.size > settings.MAX_PROFILE_PICTURE_SIZE:
             raise forms.ValidationError("Profile pictures must be 5 MB or smaller.")
 
         image = getattr(profile_picture, "image", None)
-        content_type = image.get_format_mimetype() if image else ""
-        if not content_type:
-            content_type = getattr(original_upload, "content_type", "")
-        if content_type and content_type not in settings.ALLOWED_PROFILE_PICTURE_CONTENT_TYPES:
+        image_format = getattr(image, "format", "")
+        if image_format not in settings.ALLOWED_PROFILE_PICTURE_FORMATS:
             raise forms.ValidationError("Unsupported profile picture file type.")
 
         return profile_picture
