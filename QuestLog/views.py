@@ -162,7 +162,7 @@ def parties(request):
             .order_by("party_name")
         )
 
-    return render(request, 'parties.html', {"QuestLog:parties": user_parties})
+    return render(request, 'parties.html', {"parties": user_parties})
 
 def party_details(request):
     if not request.user.is_authenticated:

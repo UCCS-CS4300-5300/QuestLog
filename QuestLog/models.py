@@ -66,9 +66,10 @@ class PartySecret(models.Model):
 
     def set_secret(self, raw_secret):
         self._secret_hash = make_password(raw_secret) 
-
+        self.save(update_fields=["_secret_hash"])
+        
     def check_secret(self,raw_secret):
-        check_password(raw_secret,self._secret_hash)
+        return check_password(raw_secret,self._secret_hash)
 
 
 class Party(models.Model):
