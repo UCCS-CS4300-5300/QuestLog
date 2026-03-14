@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
@@ -162,9 +162,11 @@ def parties(request):
             .order_by("party_name")
         )
 
-    return render(request, 'parties.html', {"Questlog:parties": user_parties})
+    return render(request, 'parties.html', {"QuestLog:parties": user_parties})
 
 def party_details(request):
+    if not request.user.is_authenticated:
+        raise Http404("log in first.")
     guid = request.GET.get("guid") or request.GET.get("party")
     if not guid:
         raise Http404("Party not specified.")

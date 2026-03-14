@@ -65,10 +65,10 @@ class PartySecret(models.Model):
     _secret_hash = models.CharField(max_length=128, editable=False) 
 
     def set_secret(self, raw_secret):
-        self.__secret_hash = make_password(raw_secret) 
+        self._secret_hash = make_password(raw_secret) 
 
     def check_secret(self,raw_secret):
-        check_password(raw_secret,self.__secret_hash)
+        check_password(raw_secret,self._secret_hash)
 
 
 class Party(models.Model):
