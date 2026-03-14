@@ -2,7 +2,6 @@
 import os
 import uuid
 from PIL import Image
-# import magic
 from django.core.exceptions import ValidationError
 MEDIA_TYPES=['proofs','avatars']
 
@@ -53,13 +52,6 @@ ALLOWED_MIME_TYPES = [
     'image/png',
     'image/gif'
 ]
-
-# def validate_content_type(file):
-#     file.seek(0)  # make sure pointer is at start
-#     mime = magic.from_buffer(file.read(2048), mime=True)
-#     file.seek(0)  # reset pointer after reading
-#     if mime not in ALLOWED_MIME_TYPES:
-#         raise ValidationError(f"Unsupported file type: {mime}")
 
 
 
