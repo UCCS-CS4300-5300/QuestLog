@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('QuestLog', '0003_partysecret_reward_party_task_userpoints'),
+        ('QuestLog', '0004_dedupe_userpoints'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

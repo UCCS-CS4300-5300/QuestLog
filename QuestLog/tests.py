@@ -753,6 +753,7 @@ class PartyViewsTemplateTests(TestCase):
             creator=self.user,
         )
         self.party.members.add(self.user)
+
 class LeaderboardViewTests(TestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
@@ -925,6 +926,19 @@ class LeaderboardViewTests(TestCase):
                 points=999,
                 rewards=self.reward,
             )
+    
+    def test_anonymous_user_does_not_see_leaderboard_link(self):
+        response = self.client.get(reverse("QuestLog:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("QuestLog:leaderboard"))
+
+    def test_authenticated_user_sees_leaderboard_link(self):
+        self.client.force_login(self.user1)
+        response = self.client.get(reverse("QuestLog:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("QuestLog:leaderboard"))
 
     # def test_parties_view_uses_template_and_lists_parties(self):
     #     self.client.force_login(self.user)
