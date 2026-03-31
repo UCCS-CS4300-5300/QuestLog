@@ -24,19 +24,34 @@ def dedupe_userpoints(apps, schema_editor):
 
             keeper = rows[0]
             total_points = sum(row.points for row in rows)
+
+            reward_ids = {row.rewards_id for row in rows}
+            reward_ids.discard(None)
+
+            if len(reward_ids) > 1:
+                raise ValueError(
+                    f"Too many conflciting rewards found for user_id={duplicate['user_id']} "
+                    f"and party_id={duplicate['party_id']}. Clean up the data before running this migration."
+                )
+            
+            avatar_to_keep = keeper.avatar
+            if not avatar_to_keep:
+                for row in rows[1:]:
+                    if row.avatar:
+                        avatar_to_keep = row.avatar
+                        break
+            reward_to_keep = keeper.rewards_id
+            if reward_to_keep is None and len(reward_ids) == 1:
+                reward_to_keep = next(iter(reward_ids))
+
             keeper.points = total_points
-
-            for extra in rows[1:]:
-                if not keeper.avatar and extra.avatar:
-                    keeper.avatar = extra.avatar
-                
-                if keeper.rewards_id is None and extra.rewards_id is not None:
-                    keeper.rewards_id = extra.rewards_id
-
-            keeper.save()
+            keeper.avatar = avatar_to_keep
+            keeper.rewards_id = reward_to_keep
 
             for extra in rows[1:]:
                 extra.delete()
+
+            keeper.save()
 
 class Migration(migrations.Migration):
     

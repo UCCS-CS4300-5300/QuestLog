@@ -158,6 +158,7 @@ def profile(request):
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
     user_parties = list(request.user.parties.all().order_by("party_name"))
+    user_party_ids = request.user.parties.values_list("id", flat=True)
 
     points_rows = (
         UserPoints.objects
