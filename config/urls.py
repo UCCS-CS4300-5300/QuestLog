@@ -24,6 +24,7 @@ from QuestLog import views as questlog_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('QuestLog.urls')),
+    path("accounts/", include("django.contrib.auth.urls")),  # Premade Account URLS
 ]
 
 if settings.DEBUG:
