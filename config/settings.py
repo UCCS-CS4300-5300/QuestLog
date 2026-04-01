@@ -19,8 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def env_bool(name, default=False):
-    return os.environ.get(name, str(default)).lower() in ("1", "true", "yes", "on")
-
+  return os.environ.get(name, str(default)).lower() in ("1", "true", "yes", "on")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -29,10 +28,13 @@ def env_bool(name, default=False):
 SECRET_KEY = 'django-insecure-b)04hpis%1byb3$r6)fbd95f_$ve^=3(mo9@-y1h973(i(tg%j'
 
 # SECURITY WARNING: don't run with debug turned on in production!
+
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
 # Safe default: keep DEBUG off unless it is explicitly enabled.
 DEBUG = env_bool('DJANGO_DEBUG', default=False)
+
 MANAGEMENT_COMMANDS = set(sys.argv[1:])
 RUNNING_TESTS = bool({"test", "behave"} & MANAGEMENT_COMMANDS)
 if RENDER_EXTERNAL_HOSTNAME:
@@ -162,3 +164,18 @@ LOGIN_REDIRECT_URL = 'QuestLog:profile'
 LOGIN_URL = 'QuestLog:login'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+#enable logging
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+}
