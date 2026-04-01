@@ -65,8 +65,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-#if not DEBUG and not RUNNING_TESTS:
-#    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+if not DEBUG and not RUNNING_TESTS:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 
@@ -154,8 +154,8 @@ STORAGES = {
     'staticfiles': {
         'BACKEND': (
             'django.contrib.staticfiles.storage.StaticFilesStorage'
-#            if DEBUG or RUNNING_TESTS
-#            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+            if DEBUG or RUNNING_TESTS or (not RENDER_EXTERNAL_HOSTNAME)
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
         ),
     },
 }
