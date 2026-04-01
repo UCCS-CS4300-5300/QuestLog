@@ -19,7 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def env_bool(name, default=False):
-  return os.environ.get(name, str(default)).lower() in ("1", "true", "yes", "on")
+    return os.environ.get(name, str(default)).lower() in ("1", "true", "yes", "on")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -65,8 +65,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-if not DEBUG and not RUNNING_TESTS:
-    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+#if not DEBUG and not RUNNING_TESTS:
+#    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'config.urls'
 
@@ -154,8 +154,8 @@ STORAGES = {
     'staticfiles': {
         'BACKEND': (
             'django.contrib.staticfiles.storage.StaticFilesStorage'
-            if DEBUG or RUNNING_TESTS
-            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+#            if DEBUG or RUNNING_TESTS
+#            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
         ),
     },
 }
@@ -165,17 +165,18 @@ LOGIN_URL = 'QuestLog:login'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-#enable logging
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
+if DEBUG is not True:
+    #enable better standard logging when debug disabled
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+            },
         },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "WARNING",
-    },
-}
+        "root": {
+            "handlers": ["console"],
+            "level": "WARNING",
+        },
+    }
