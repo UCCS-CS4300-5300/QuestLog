@@ -77,7 +77,6 @@ class SettingsBranchCoverageTests(SimpleTestCase):
         original_debug = os.environ.get("DJANGO_DEBUG")
 
         try:
-            os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
             os.environ.pop("DJANGO_DEBUG", None)
             sys.argv = ["manage.py", "runserver"]
 
