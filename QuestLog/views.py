@@ -11,7 +11,8 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party
+from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party, UserPoints
+from collections import defaultdict
 
 
 def get_request_hosts(request):
@@ -154,6 +155,35 @@ def profile(request):
         },
     )
 
+@login_required(login_url="QuestLog:login")
+def leaderboard(request):
+    user_parties = list(request.user.parties.all().order_by("party_name"))
+
+    points_rows = (
+        UserPoints.objects
+        .filter(party__in=user_parties)
+        .select_related("user", "party", "user__profile")
+        .order_by("party__party_name", "-points", "user__username")
+    )
+
+    standings_by_party_id = defaultdict(list)
+    for row in points_rows:
+        standings_by_party_id[row.party_id].append(row)
+
+    party_leaderboards = []
+    for party in user_parties:
+        party_leaderboards.append({
+            "party": party,
+            "standings": standings_by_party_id[party.id],
+        })
+
+    return render(
+        request,
+        "leaderboard.html",
+        {"party_leaderboards": party_leaderboards},
+    )
+
+
 def parties(request):
     user_parties = Party.objects.none()
     if request.user.is_authenticated:
@@ -197,5 +227,4 @@ def party_details(request):
 
 def create_party(request):
     return render(request, 'create_party.html')
-def leaderboard(request):
-    return render(request, 'leaderboard.html')
+

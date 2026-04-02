@@ -1,69 +1,78 @@
-{% load static %}
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}QuestLog{% endblock %}</title>
-  {# Load the tag library #}
-  {% load django_bootstrap5 %}
+{% extends 'base.html' %}
+{% block title %}Leaderboard | Quest Log{% endblock %}
 
-  {# Load CSS and JavaScript #}
-  {% bootstrap_css %}
-  {% bootstrap_javascript %}
-
-  {# Display django.contrib.messages as Bootstrap alerts #}
-  {% bootstrap_messages %}
-</head>
-
-<body>
-  <nav class="navbar navbar-expand-sm bg-light">
-
-  <div class="container-fluid">
-    <!-- Links -->
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link" href="#">
-          <img src="{% static 'images/questlog-logo.png' %}" alt="QuestLog Logo" style="height:40px; vertical-align:middle;">
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:home' %}">Home</a>
-      </li>
-
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:login' %}">Login</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:register' %}">Sign Up</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
-      </li>
-
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:tasks' %}">Tasks</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:about' %}">About</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:parties' %}">Parties</a>
-      </li>
-    </ul>
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link" >Settings</a>
-      </li>
-
-    </ul>
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h3 mb-1">Party leaderboards</h1>
+      <div class="text-muted">See how members rank in each of your parties.</div>
+    </div>
   </div>
 
-</nav>
+  {% if party_leaderboards %}
+    <div class="row g-3">
+      {% for entry in party_leaderboards %}
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-semibold">{{ entry.party.party_name }}</div>
+                <div class="small text-muted">
+                  {{ entry.standings|length }} member{{ entry.standings|length|pluralize }}
+                </div>
+              </div>
+              <a class="btn btn-sm btn-outline-secondary"
+                 href="{% url 'QuestLog:party_details' %}?guid={{ entry.party.guid }}">
+                View party
+              </a>
+            </div>
 
-  <div class="container py-4">
-    {% block content %}{% endblock %}
-  </div>
-
-</body>
-</html>
+            <div class="card-body">
+              {% if entry.standings %}
+                <div class="table-responsive">
+                  <table class="table align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Member</th>
+                        <th class="text-end">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for score in entry.standings %}
+                        <tr>
+                          <td class="fw-semibold">{{ forloop.counter }}</td>
+                          <td>
+                            {% if score.user.profile.display_name %}
+                              {{ score.user.profile.display_name }}
+                            {% else %}
+                              {{ score.user.username }}
+                            {% endif %}
+                            {% if request.user.is_authenticated and score.user.pk == request.user.pk %}
+                              <span class="badge text-bg-primary ms-2">You</span>
+                            {% endif %}
+                          </td>
+                          <td class="text-end">{{ score.points }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div class="text-muted">No scores have been recorded for this party yet.</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card">
+      <div class="card-body">
+        <div class="fw-semibold mb-1">No parties yet</div>
+        <div class="text-muted mb-3">Join or create a party to start tracking leaderboard progress.</div>
+        <a class="btn btn-primary" href="{% url 'QuestLog:create_party' %}">Create / join a party</a>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
