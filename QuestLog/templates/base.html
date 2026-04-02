@@ -30,20 +30,22 @@
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:home' %}">Home</a>
       </li>
-
+  {% if request.user.is_authenticated %}
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'QuestLog:tasks' %}">Tasks</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'QuestLog:parties' %}">Parties</a>
+      </li>
+  {% else %}
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:login' %}">Login</a>
       </li>
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:register' %}">Sign Up</a>
       </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
-      </li>
+  {% endif %}
 
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:tasks' %}">Tasks</a>
-      </li>
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:about' %}">About</a>
       </li>
@@ -58,9 +60,8 @@
     </ul>
     <ul class="navbar-nav">
       <li class="nav-item">
-        <a class="nav-link" >Settings</a>
+        <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
       </li>
-
     </ul>
   </div>
 

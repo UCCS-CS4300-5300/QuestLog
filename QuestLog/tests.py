@@ -77,8 +77,8 @@ class SettingsBranchCoverageTests(SimpleTestCase):
         original_debug = os.environ.get("DJANGO_DEBUG")
 
         try:
-            os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
             os.environ.pop("DJANGO_DEBUG", None)
+            os.environ["RENDER_EXTERNAL_HOSTNAME"] = "example.com"
             sys.argv = ["manage.py", "runserver"]
 
             reloaded = importlib.reload(module)
@@ -319,6 +319,8 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(user.email, "liljit@example.com")
         self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
+
+
 
     def test_register_allows_missing_profile_picture(self):
         response = self.client.post(
