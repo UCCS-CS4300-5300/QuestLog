@@ -28,7 +28,7 @@ EXPECTED_VIEW_STATUSES = {
     "profile": 302,
     'parties': 200,
     'party_details':404, #intil we populate the persistent test database
-    'leaderboard': 200,
+    'leaderboard': 302,
     'create_party': 200
 
 }
@@ -755,6 +755,192 @@ class PartyViewsTemplateTests(TestCase):
             creator=self.user,
         )
         self.party.members.add(self.user)
+
+class LeaderboardViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.db import IntegrityError
+
+        from .models import Party, Reward, UserPoints, get_user_profile
+
+        self.IntegrityError = IntegrityError
+        User = get_user_model()
+
+        self.user1 = User.objects.create_user(
+            username="lilpump",
+            email="lilpump@example.com",
+            password="test-password",
+        )
+        self.user2 = User.objects.create_user(
+            username="lilpeep",
+            email="lilpeep@example.com",
+            password="test-password",
+        )
+        self.user3 = User.objects.create_user(
+            username="lilyatchy",
+            email="lilyatchy@example.com",
+            password="test-password",
+        )
+
+        profile1 = get_user_profile(self.user1)
+        profile1.display_name = "lilpump"
+        profile1.save()
+
+        profile2 = get_user_profile(self.user2)
+        profile2.display_name = "lilpeep"
+        profile2.save()
+
+        profile3 = get_user_profile(self.user3)
+        profile3.display_name = "lilyatchy"
+        profile3.save()
+
+        self.party1 = Party.objects.create(
+            party_name="Red Team",
+            creator=self.user1,
+        )
+        self.party2 = Party.objects.create(
+            party_name="Blue Team",
+            creator=self.user1,
+        )
+
+        self.party1.members.add(self.user1, self.user2)
+        self.party2.members.add(self.user1, self.user3)
+
+        self.reward = Reward.objects.create(class_attributes="Default Reward")
+
+        self.user1_red_points = UserPoints.objects.create(
+            user=self.user1,
+            party=self.party1,
+            points=50,
+            rewards=self.reward,
+        )
+        self.user2_red_points = UserPoints.objects.create(
+            user=self.user2,
+            party=self.party1,
+            points=80,
+            rewards=self.reward,
+        )
+        self.user1_blue_points = UserPoints.objects.create(
+            user=self.user1,
+            party=self.party2,
+            points=25,
+            rewards=self.reward,
+        )
+        self.user3_blue_points = UserPoints.objects.create(
+            user=self.user3,
+            party=self.party2,
+            points=60,
+            rewards=self.reward,
+        )
+
+    def test_leaderboard_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_leaderboard_uses_template(self):
+        self.client.force_login(self.user1)
+
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "leaderboard.html")
+
+    def test_leaderboard_shows_empty_state_for_user_with_no_parties(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        no_party_user = User.objects.create_user(
+            username="nobody",
+            email="nobody@example.com",
+            password="test-password",
+        )
+
+        self.client.force_login(no_party_user)
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No parties yet")
+        self.assertContains(response, "Create / join a party")
+
+    def test_leaderboard_shows_only_logged_in_users_parties(self):
+        self.client.force_login(self.user2)
+
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Red Team")
+        self.assertNotContains(response, "Blue Team")
+
+    def test_leaderboard_context_contains_parties_for_logged_in_user(self):
+        self.client.force_login(self.user1)
+
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("party_leaderboards", response.context)
+        self.assertEqual(len(response.context["party_leaderboards"]), 2)
+        self.assertEqual(response.context["party_leaderboards"][0]["party"], self.party2)
+        self.assertEqual(response.context["party_leaderboards"][1]["party"], self.party1)
+
+    def test_leaderboard_orders_scores_descending_within_each_party(self):
+        self.client.force_login(self.user1)
+
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+
+        party_leaderboards = response.context["party_leaderboards"]
+
+        blue_team_standings = list(party_leaderboards[0]["standings"])
+        red_team_standings = list(party_leaderboards[1]["standings"])
+
+        self.assertEqual(blue_team_standings[0].user, self.user3)
+        self.assertEqual(blue_team_standings[1].user, self.user1)
+
+        self.assertEqual(red_team_standings[0].user, self.user2)
+        self.assertEqual(red_team_standings[1].user, self.user1)
+
+    def test_leaderboard_displays_member_display_names(self):
+        self.client.force_login(self.user1)
+
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "lilpump")
+        self.assertContains(response, "lilpeep")
+        self.assertContains(response, "lilyatchy")
+
+    def test_leaderboard_marks_logged_in_user_as_you(self):
+        self.client.force_login(self.user1)
+
+        response = self.client.get(reverse("QuestLog:leaderboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You")
+
+    def test_userpoints_is_unique_per_user_and_party(self):
+        with self.assertRaises(self.IntegrityError):
+            self.user1_red_points.__class__.objects.create(
+                user=self.user1,
+                party=self.party1,
+                points=999,
+                rewards=self.reward,
+            )
+    
+    def test_anonymous_user_does_not_see_leaderboard_link(self):
+        response = self.client.get(reverse("QuestLog:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("QuestLog:leaderboard"))
+
+    def test_authenticated_user_sees_leaderboard_link(self):
+        self.client.force_login(self.user1)
+        response = self.client.get(reverse("QuestLog:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("QuestLog:leaderboard"))
 
     # def test_parties_view_uses_template_and_lists_parties(self):
     #     self.client.force_login(self.user)

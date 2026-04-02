@@ -81,11 +81,18 @@ class Party(models.Model):
     # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation                                 
 
 class UserPoints(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
-    party = models.ForeignKey(Party,on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    party = models.ForeignKey(Party, on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
-    rewards = models.ForeignKey(Reward,on_delete=models.PROTECT)
+    rewards = models.ForeignKey(Reward, on_delete=models.PROTECT)
     avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) 
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "party"], name="unique_user_points_per_party")
+        ]
+    def __str__(self):
+        return f"{self.user.username} - {self.party.party_name}: {self.points}"
 
 
 
