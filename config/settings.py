@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+import dj_database_url
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -97,6 +99,11 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+# This will check if the environment variable provided by render prod environment is available
+# If it is, this will assign the database to the production database provided by render
+# This pattern is what was recommended by the Render documentation for setting this for Django projects
+if os.environ.get('DATABASE_URL'):
+    DATABASES['default'] = dj_database_url.parse(os.environ.get("DATABASE_URL"), conn_max_age=600)
 
 
 # Password validation
