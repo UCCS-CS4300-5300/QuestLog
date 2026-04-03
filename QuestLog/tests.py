@@ -24,12 +24,13 @@ EXPECTED_VIEW_STATUSES = {
     "tasks": 200,
     "complete_task": 200,
     "login": 200,
+    "logout": 302,
     "register": 200,
     "profile": 302,
-    'parties': 200,
-    'party_details':404, #intil we populate the persistent test database
+    'parties': 302,
+    'party_details': 302,
     'leaderboard': 302,
-    'create_party': 200
+    'create_party': 302,
 
 }
 
@@ -314,7 +315,7 @@ class AuthenticationFlowTests(TestCase):
         user = get_user_model().objects.get(username="liljit")
         profile = get_user_profile(user)
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
         self.assertEqual(profile.display_name, "liljitdisplay")
         self.assertEqual(user.email, "liljit@example.com")
         self.assertTrue(profile.profile_picture.name.startswith("profile_pictures/"))
@@ -337,7 +338,7 @@ class AuthenticationFlowTests(TestCase):
         user = get_user_model().objects.get(username="liljit")
         profile = get_user_profile(user)
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
         self.assertEqual(profile.display_name, "liljitdisplay")
         self.assertFalse(profile.profile_picture.name)
 
@@ -352,7 +353,7 @@ class AuthenticationFlowTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
     def test_login_uses_safe_next_redirect(self):
@@ -424,7 +425,7 @@ class AuthenticationFlowTests(TestCase):
                 },
             )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_login_rejects_absolute_redirects_when_allowed_hosts_is_wildcard(self):
         self.create_user("liljit")
@@ -439,7 +440,7 @@ class AuthenticationFlowTests(TestCase):
                 },
             )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_login_rejects_external_redirects(self):
         self.create_user("liljit")
@@ -453,7 +454,7 @@ class AuthenticationFlowTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_login_rejects_invalid_redirect_schemes(self):
         self.create_user("liljit")
@@ -467,7 +468,7 @@ class AuthenticationFlowTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_login_rejects_scheme_relative_redirects(self):
         self.create_user("liljit")
@@ -481,7 +482,7 @@ class AuthenticationFlowTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_login_rejects_backslash_prefixed_redirects(self):
         self.create_user("liljit")
@@ -495,7 +496,7 @@ class AuthenticationFlowTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_login_redirects_authenticated_user_to_profile(self):
         user = self.create_user("liljit")
@@ -503,7 +504,7 @@ class AuthenticationFlowTests(TestCase):
 
         response = self.client.get(reverse("QuestLog:login"))
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_register_redirects_authenticated_user_to_profile(self):
         user = self.create_user("liljit")
@@ -511,7 +512,7 @@ class AuthenticationFlowTests(TestCase):
 
         response = self.client.get(reverse("QuestLog:register"))
 
-        self.assertRedirects(response, reverse("QuestLog:profile"))
+        self.assertRedirects(response, reverse("QuestLog:home"))
 
     def test_profile_page_displays_logged_in_user_details(self):
         user = self.create_user(

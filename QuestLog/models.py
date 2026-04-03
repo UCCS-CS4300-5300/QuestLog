@@ -7,6 +7,8 @@ from django.contrib.auth.hashers import make_password, check_password
 import uuid
 from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avatars, secure_upload_path_proofs, validate_image_file, validate_upload
 
+from collections import defaultdict
+
 def profile_picture_upload_to(instance, filename):
     extension = Path(filename).suffix.lower()
     return f"profile_pictures/{uuid4().hex}{extension}"
@@ -54,12 +56,59 @@ def save_user_profile(user, display_name=None, profile_picture=None):
 def get_user_display_name(user):
     return get_user_profile(user).display_name or user.get_username()
 
+#gen leaderboard
+def genLeaderboard(user):
+    user_parties = list(user.parties.all().order_by("party_name"))
 
+    points_rows = (
+        UserPoints.objects
+        .filter(party__in=user_parties)
+        .select_related("user", "party", "user__profile")
+        .order_by("party__party_name", "-points", "user__username")
+    )
+
+    standings_by_party_id = defaultdict(list)
+    for row in points_rows:
+        standings_by_party_id[row.party_id].append(row)
+
+    party_leaderboards = []
+    for party in user_parties:
+        party_leaderboards.append({
+            "party": party,
+            "standings": standings_by_party_id[party.id],
+        })
+    return party_leaderboards
+
+#get parties
+def getParties(user):
+    user_parties = (
+        user.parties.all()
+        .order_by("party_name")
+    )
+    return user_parties
+
+#get party details
+def getPartyDetails(user, guid):
+    if Party.objects.filter(guid=guid).exists() and party.members.filter(pk=user.pk).exists():
+        #return details
+        return Party.objects.get(guid=guid)
+    else:
+        #return error
+        return None
+
+#get tasks for a party
+def getPartyTasks(party):
+    return (
+        Task.objects.filter(affiliation=party)
+        .select_related("owner")
+        .order_by("status", "-created_at")
+    )
+#get party members
+def getPartyMembers(party):
+    return party.members.all().order_by("username")
 
 class Reward(models.Model):
     class_attributes = models.CharField(default="To be determined",max_length=100)
-
-
 
 class PartySecret(models.Model):
     _secret_hash = models.CharField(max_length=128, editable=False) 

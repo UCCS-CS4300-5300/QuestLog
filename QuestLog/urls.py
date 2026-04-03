@@ -9,8 +9,10 @@ urlpatterns = [
     path('tasks/', views.tasks, name='tasks'),
     path('complete_task/', views.complete_task, name='complete_task'),
     path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
     path('register/', views.register, name='register'),
     path('profile/', views.profile, name='profile'),
+
 
     # path('create_task/', views.create_task, name='create_task'),
     path('parties/', views.parties, name='parties'), #join lives here
