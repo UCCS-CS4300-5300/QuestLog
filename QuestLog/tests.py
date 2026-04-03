@@ -24,12 +24,13 @@ EXPECTED_VIEW_STATUSES = {
     "tasks": 200,
     "complete_task": 200,
     "login": 200,
+    "logout": 302,
     "register": 200,
     "profile": 302,
-    'parties': 200,
-    'party_details':404, #intil we populate the persistent test database
+    'parties': 302,
+    'party_details': 302,
     'leaderboard': 302,
-    'create_party': 200
+    'create_party': 302,
 
 }
 
