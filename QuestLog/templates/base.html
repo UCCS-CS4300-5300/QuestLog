@@ -35,12 +35,6 @@
         <a class="nav-link" href="{% url 'QuestLog:parties' %}">Parties</a>
       </li>
   {% endif %}
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:about' %}">About</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:parties' %}">Parties</a>
-      </li>
       {% if user.is_authenticated %}
       <li class="nav-item">
         <a class="nav-link" href="{% url 'QuestLog:leaderboard' %}">Leaderboard</a>
@@ -76,9 +70,6 @@
         </li>
       {% endif %}
     <ul class="navbar-nav ms-auto">
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
-      </li>
       <li class="nav-item">
         <button class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleTheme()">Theme Toggle</button>
       </li>
