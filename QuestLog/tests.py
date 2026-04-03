@@ -29,8 +29,8 @@ EXPECTED_VIEW_STATUSES = {
     'parties': 200,
     'party_details':404, #intil we populate the persistent test database
     'leaderboard': 302,
-    'create_party': 200
-
+    'create_party': 200,
+    'upload_task_proof': 200,
 }
 
 

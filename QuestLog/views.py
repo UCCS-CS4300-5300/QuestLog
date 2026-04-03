@@ -228,3 +228,6 @@ def party_details(request):
 def create_party(request):
     return render(request, 'create_party.html')
 
+
+def upload_task_proof(request):
+    return render(request, 'upload_task_proof.html')
