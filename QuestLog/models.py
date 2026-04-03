@@ -7,6 +7,8 @@ from django.contrib.auth.hashers import make_password, check_password
 import uuid
 from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avatars, secure_upload_path_proofs, validate_image_file, validate_upload
 
+from collections import defaultdict
+
 def profile_picture_upload_to(instance, filename):
     extension = Path(filename).suffix.lower()
     return f"profile_pictures/{uuid4().hex}{extension}"

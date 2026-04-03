@@ -3,7 +3,7 @@ from urllib.parse import unquote, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -11,8 +11,7 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party, UserPoints
-from collections import defaultdict
+from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party, UserPoints, genLeaderboard, getParties, getPartyTasks, getPartyMembers
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -70,7 +69,6 @@ def get_safe_redirect(request):
 #render a template page
 def renderPage(request, page):
     if(request.user.is_authenticated):
-
         data = { #initial data
             "profile": get_user_profile(request.user),
             "party_leaderboards": genLeaderboard(request.user),
@@ -82,10 +80,10 @@ def renderPage(request, page):
             data["party_members"] = getPartyMembers(data["party"])
             data["party_tasks"] = getPartyTasks(data["party"])
 
-        return renderPage(request, page, data)
+        return render(request, page, data)
     else:
 
-        return renderPage(request, page)
+        return render(request, page)
 
 def home(request):
     return renderPage(request, "home.html")
@@ -131,6 +129,13 @@ def register(request):
         return redirect("QuestLog:profile")
 
     return render(request, "register.html", {"form": form})
+
+#logout
+@login_required(login_url="QuestLog:login")
+def logout_view(request):
+    logout(request)
+    return redirect("QuestLog:home")
+
 
 
 def normalize_media_path(path):
