@@ -19,5 +19,6 @@ urlpatterns = [
     path('party_details/', views.party_details, name='party_details'), #MAY NEED TO BE /parties/guid/ 
     path('leaderboard/', views.leaderboard, name='leaderboard'),
     path('create_party/', views.create_party, name='create_party'),
+    path('upload/', views.upload_task_proof, name='upload_task_proof'),
 
 ]
