@@ -82,25 +82,25 @@ def renderPage(request, page):
             data["party_members"] = getPartyMembers(data["party"])
             data["party_tasks"] = getPartyTasks(data["party"])
 
-        return render(request, page, data)
+        return renderPage(request, page, data)
     else:
 
-        return render(request, page)
+        return renderPage(request, page)
 
 def home(request):
-    return render(request, "home.html")
+    return renderPage(request, "home.html")
 
 
 def about(request):
-    return render(request, "about.html")
+    return renderPage(request, "about.html")
 
 
 def tasks(request):
-    return render(request, "tasks.html")
+    return renderPage(request, "tasks.html")
 
 
 def complete_task(request):
-    return render(request, "complete_task.html")
+    return renderPage(request, "complete_task.html")
 
 
 def login_view(request):
@@ -164,52 +164,22 @@ def serve_media(request, path):
 
 @login_required(login_url="QuestLog:login")
 def profile(request):
-    return render(
-        request,
-        "profile.html",
-        {
-
-            "profile": get_user_profile(request.user),
-        },
-    )
+    return renderPage(request, "profile.html")
 
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
-    party_leaderboards = genLeaderboard(request.user)
-    return render(
-        request,
-        "leaderboard.html",
-        {"party_leaderboards": party_leaderboards},
-    )
+    return renderPage(request, "leaderboard.html")
 
 @login_required(login_url="QuestLog:login")
 def parties(request):
-    user_parties = getParties(request.user)
-    return render(request, 'parties.html', {"parties": user_parties})
+    return renderPage(request, "parties.html")
 
 
 @login_required(login_url="QuestLog:login")
 def party_details(request):
-    guid = request.GET.get("guid") or request.GET.get("party")
-    if not guid:
-        raise Http404("Party not specified.")
+    return renderPage(request, "party_details.html")
 
-    party = getPartyDetails(request.user, guid)
-    if party == None:
-        raise Http404("Party not found.")
-
-    tasks_qs = getPartyTasks(party)
-
-    return render(
-        request,
-        'party_details.html',
-        {
-            "party": party,
-            "members":getPartyMembers(party),
-            "tasks": tasks_qs,
-        },
-    )
-
+@login_required(login_url="QuestLog:login")
 def create_party(request):
-    return render(request, 'create_party.html')
+    return renderPage(request, "create_party.html")
 
