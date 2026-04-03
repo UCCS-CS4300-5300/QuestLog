@@ -14,7 +14,6 @@ from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party, UserPoints
 from collections import defaultdict
 
-
 def get_request_hosts(request):
     request_host = request.get_host()
     request_hostname = urlsplit(f"//{request_host}").hostname
@@ -68,6 +67,25 @@ def get_safe_redirect(request):
 
     return default_redirect
 
+#render a template page
+def renderPage(request, page):
+    if(request.user.is_authenticated):
+
+        data = { #initial data
+            "profile": get_user_profile(request.user),
+            "party_leaderboards": genLeaderboard(request.user),
+            "parties": getParties(request.user),
+        }
+        guid = request.GET.get("guid") or request.GET.get("party") #check to see if there is a party specified
+        if guid:
+            data["party"] = getPartyDetails(request.user, guid)
+            data["party_members"] = getPartyMembers(data["party"])
+            data["party_tasks"] = getPartyTasks(data["party"])
+
+        return render(request, page, data)
+    else:
+
+        return render(request, page)
 
 def home(request):
     return render(request, "home.html")
@@ -150,77 +168,44 @@ def profile(request):
         request,
         "profile.html",
         {
-            "profile_user": request.user,
+
             "profile": get_user_profile(request.user),
         },
     )
 
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
-    user_parties = list(request.user.parties.all().order_by("party_name"))
-
-    points_rows = (
-        UserPoints.objects
-        .filter(party__in=user_parties)
-        .select_related("user", "party", "user__profile")
-        .order_by("party__party_name", "-points", "user__username")
-    )
-
-    standings_by_party_id = defaultdict(list)
-    for row in points_rows:
-        standings_by_party_id[row.party_id].append(row)
-
-    party_leaderboards = []
-    for party in user_parties:
-        party_leaderboards.append({
-            "party": party,
-            "standings": standings_by_party_id[party.id],
-        })
-
+    party_leaderboards = genLeaderboard(request.user)
     return render(
         request,
         "leaderboard.html",
         {"party_leaderboards": party_leaderboards},
     )
 
-
+@login_required(login_url="QuestLog:login")
 def parties(request):
-    user_parties = Party.objects.none()
-    if request.user.is_authenticated:
-        user_parties = (
-            request.user.parties.all()
-            .order_by("party_name")
-        )
-
+    user_parties = getParties(request.user)
     return render(request, 'parties.html', {"parties": user_parties})
 
+
+@login_required(login_url="QuestLog:login")
 def party_details(request):
-    if not request.user.is_authenticated:
-        raise Http404("log in first.")
     guid = request.GET.get("guid") or request.GET.get("party")
     if not guid:
         raise Http404("Party not specified.")
 
-    try:
-        party = Party.objects.prefetch_related("members").get(guid=guid)
-    except Party.DoesNotExist as e:
-        raise Http404("Party not found.") from e
-
-    if request.user.is_authenticated and not party.members.filter(pk=request.user.pk).exists():
+    party = getPartyDetails(request.user, guid)
+    if party == None:
         raise Http404("Party not found.")
 
-    tasks_qs = (
-        Task.objects.filter(affiliation=party)
-        .select_related("owner")
-        .order_by("status", "-created_at")
-    )
+    tasks_qs = getPartyTasks(party)
 
     return render(
         request,
         'party_details.html',
         {
             "party": party,
-            "members": party.members.all().order_by("username"),
+            "members":getPartyMembers(party),
             "tasks": tasks_qs,
         },
     )

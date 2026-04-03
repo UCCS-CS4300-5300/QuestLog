@@ -26,14 +26,14 @@
                         <h5>Account Information</h5>
 
                         <p>
-                            <strong>Display Name:</strong> {{ profile.display_name|default:profile_user.username }}
+                            <strong>Display Name:</strong> {{ profile.display_name|default:request.user.username }}
                         </p>
 
                         <p>
-                            <strong>Username:</strong> {{ profile_user.username }}
+                            <strong>Username:</strong> {{ request.user.username }}
                         </p>
                         <p>
-                            <strong>Email:</strong> {{ profile_user.email|default:"Not provided" }}
+                            <strong>Email:</strong> {{ request.user.email|default:"Not provided" }}
                         </p>
 
                     </div>
