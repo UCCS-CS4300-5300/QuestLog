@@ -17,7 +17,7 @@ Feature: Quest Log account profile behavior
   Scenario: The sign up page creates a Quest Log user
     When I submit the sign up form for username "signuphero", display name "Sign Up Hero", and password "mylilpasslmao"
     Then the response status should be 302
-    And the response should redirect to "/profile/"
+    And the response should redirect to "/"
     And a Quest Log user with username "signuphero" should exist
     And the authenticated user should be "signuphero"
 
@@ -25,5 +25,5 @@ Feature: Quest Log account profile behavior
     Given a Quest Log user exists with username "lilloginbroagain", display name "lilloginbro", and password "mylilpasslmao"
     When I submit the login form for username "lilloginbroagain" and password "mylilpasslmao"
     Then the response status should be 302
-    And the response should redirect to "/profile/"
+    And the response should redirect to "/"
     And the authenticated user should be "lilloginbroagain"
