@@ -3,7 +3,7 @@ from urllib.parse import unquote, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -11,9 +11,7 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party, UserPoints
-from collections import defaultdict
-
+from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -37,7 +35,7 @@ def get_redirect_allowed_hosts(request):
 
 def get_safe_redirect(request):
     redirect_to = request.POST.get("next") or request.GET.get("next")
-    default_redirect = reverse("QuestLog:profile")
+    default_redirect = reverse("QuestLog:home")
 
     if not redirect_to:
         return default_redirect
@@ -68,26 +66,44 @@ def get_safe_redirect(request):
 
     return default_redirect
 
+#render a template page
+def renderPage(request, page):
+    if(request.user.is_authenticated):
+        data = { #initial data
+            "profile": get_user_profile(request.user),
+            "party_leaderboards": genLeaderboard(request.user),
+            "parties": getParties(request.user),
+        }
+        guid = request.GET.get("guid") or request.GET.get("party") #check to see if there is a party specified
+        if guid:
+            data["party"] = getPartyDetails(request.user, guid)
+            data["party_members"] = getPartyMembers(data["party"])
+            data["party_tasks"] = getPartyTasks(data["party"])
+
+        return render(request, page, data)
+    else:
+
+        return render(request, page)
 
 def home(request):
-    return render(request, "home.html")
+    return renderPage(request, "home.html")
 
 
 def about(request):
-    return render(request, "about.html")
+    return renderPage(request, "about.html")
 
 
 def tasks(request):
-    return render(request, "tasks.html")
+    return renderPage(request, "tasks.html")
 
 
 def complete_task(request):
-    return render(request, "complete_task.html")
+    return renderPage(request, "complete_task.html")
 
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("QuestLog:profile")
+        return redirect("QuestLog:home")
 
     form = QuestLogAuthenticationForm(request, data=request.POST or None)
     redirect_to = get_safe_redirect(request)
@@ -102,7 +118,7 @@ def login_view(request):
 
 def register(request):
     if request.user.is_authenticated:
-        return redirect("QuestLog:profile")
+        return redirect("QuestLog:home")
 
     form = QuestLogUserCreationForm(request.POST or None, request.FILES or None)
 
@@ -110,9 +126,16 @@ def register(request):
         user = form.save()
         login(request, user)
         messages.success(request, "Account created successfully.")
-        return redirect("QuestLog:profile")
+        return redirect("QuestLog:home")
 
     return render(request, "register.html", {"form": form})
+
+#logout
+@login_required(login_url="QuestLog:login")
+def logout_view(request):
+    logout(request)
+    return redirect("QuestLog:home")
+
 
 
 def normalize_media_path(path):
@@ -146,87 +169,24 @@ def serve_media(request, path):
 
 @login_required(login_url="QuestLog:login")
 def profile(request):
-    return render(
-        request,
-        "profile.html",
-        {
-            "profile_user": request.user,
-            "profile": get_user_profile(request.user),
-        },
-    )
+    return renderPage(request, "profile.html")
 
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
-    user_parties = list(request.user.parties.all().order_by("party_name"))
+    return renderPage(request, "leaderboard.html")
 
-    points_rows = (
-        UserPoints.objects
-        .filter(party__in=user_parties)
-        .select_related("user", "party", "user__profile")
-        .order_by("party__party_name", "-points", "user__username")
-    )
-
-    standings_by_party_id = defaultdict(list)
-    for row in points_rows:
-        standings_by_party_id[row.party_id].append(row)
-
-    party_leaderboards = []
-    for party in user_parties:
-        party_leaderboards.append({
-            "party": party,
-            "standings": standings_by_party_id[party.id],
-        })
-
-    return render(
-        request,
-        "leaderboard.html",
-        {"party_leaderboards": party_leaderboards},
-    )
-
-
+@login_required(login_url="QuestLog:login")
 def parties(request):
-    user_parties = Party.objects.none()
-    if request.user.is_authenticated:
-        user_parties = (
-            request.user.parties.all()
-            .order_by("party_name")
-        )
+    return renderPage(request, "parties.html")
 
-    return render(request, 'parties.html', {"parties": user_parties})
 
+@login_required(login_url="QuestLog:login")
 def party_details(request):
-    if not request.user.is_authenticated:
-        raise Http404("log in first.")
-    guid = request.GET.get("guid") or request.GET.get("party")
-    if not guid:
-        raise Http404("Party not specified.")
+    return renderPage(request, "party_details.html")
 
-    try:
-        party = Party.objects.prefetch_related("members").get(guid=guid)
-    except Party.DoesNotExist as e:
-        raise Http404("Party not found.") from e
-
-    if request.user.is_authenticated and not party.members.filter(pk=request.user.pk).exists():
-        raise Http404("Party not found.")
-
-    tasks_qs = (
-        Task.objects.filter(affiliation=party)
-        .select_related("owner")
-        .order_by("status", "-created_at")
-    )
-
-    return render(
-        request,
-        'party_details.html',
-        {
-            "party": party,
-            "members": party.members.all().order_by("username"),
-            "tasks": tasks_qs,
-        },
-    )
-
+@login_required(login_url="QuestLog:login")
 def create_party(request):
-    return render(request, 'create_party.html')
+    return renderPage(request, "create_party.html")
 
 
 def upload_task_proof(request):
