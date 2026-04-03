@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile, Task, Party, UserPoints, genLeaderboard, getParties, getPartyTasks, getPartyMembers
+from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -35,7 +35,7 @@ def get_redirect_allowed_hosts(request):
 
 def get_safe_redirect(request):
     redirect_to = request.POST.get("next") or request.GET.get("next")
-    default_redirect = reverse("QuestLog:profile")
+    default_redirect = reverse("QuestLog:home")
 
     if not redirect_to:
         return default_redirect
@@ -103,7 +103,7 @@ def complete_task(request):
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("QuestLog:profile")
+        return redirect("QuestLog:home")
 
     form = QuestLogAuthenticationForm(request, data=request.POST or None)
     redirect_to = get_safe_redirect(request)
@@ -118,7 +118,7 @@ def login_view(request):
 
 def register(request):
     if request.user.is_authenticated:
-        return redirect("QuestLog:profile")
+        return redirect("QuestLog:home")
 
     form = QuestLogUserCreationForm(request.POST or None, request.FILES or None)
 
@@ -126,7 +126,7 @@ def register(request):
         user = form.save()
         login(request, user)
         messages.success(request, "Account created successfully.")
-        return redirect("QuestLog:profile")
+        return redirect("QuestLog:home")
 
     return render(request, "register.html", {"form": form})
 
