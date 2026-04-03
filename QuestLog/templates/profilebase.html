@@ -1,0 +1,55 @@
+            <div class="card border-0">
+                <div class="card-body text-center">
+
+                    {% if profile.profile_picture %}
+                        <img  src="{{ profile.profile_picture.url }}"
+                              class="rounded-circle mb-3"
+                              alt="{{ profile.display_name|default:profile_user.username }} profile picture"
+                              style="width: 120px; height: 120px; object-fit: cover;">
+                    {% else %}
+                        <div class="bg-secondary-subtle rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                             style="width: 120px; height: 120px;">
+                            <span class="fs-2 fw-bold text-secondary">
+                                {{ profile.display_name|default:profile_user.username|first|upper }}
+                            </span>
+                        </div>
+                    {% endif %}
+
+                    <h1 class="h3" >{{ profile.display_name|default:profile_user.username }}</h1>
+
+                    <p class="text-muted mb-4">
+                        Quest Log profile
+                    </p>
+
+                    <div class="text-start mb-4" >
+
+                        <h5>Account Information</h5>
+
+                        <p>
+                            <strong>Display Name:</strong> {{ profile.display_name|default:profile_user.username }}
+                        </p>
+
+                        <p>
+                            <strong>Username:</strong> {{ profile_user.username }}
+                        </p>
+                        <p>
+                            <strong>Email:</strong> {{ profile_user.email|default:"Not provided" }}
+                        </p>
+
+                    </div>
+                    <!-- bagdes-->
+                    <div class="text-start">
+
+                        <h5>Badges</h5>
+
+                        <p class="text-muted mb-0">
+                            No badges earned yet.
+                        </p>
+                    </div>
+                    <form action="{% url 'logout' %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit">Log Out</button>
+                    </form>
+                </div>
+
+            </div>

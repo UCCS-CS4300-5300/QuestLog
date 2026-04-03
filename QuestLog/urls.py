@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 app_name = 'QuestLog'
@@ -11,6 +11,9 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('register/', views.register, name='register'),
     path('profile/', views.profile, name='profile'),
+
+    #account management URLs
+    path("", include("django.contrib.auth.urls")),
 
     # path('create_task/', views.create_task, name='create_task'),
     path('parties/', views.parties, name='parties'), #join lives here
