@@ -356,6 +356,18 @@ class AuthenticationFlowTests(TestCase):
         self.assertRedirects(response, reverse("QuestLog:home"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
 
+
+    def test_logout_logs_out(self):
+        user = self.create_user("liljit")
+        self.client.force_login(user)
+        resp1 = self.client.get(reverse("QuestLog:profile"))
+        resp2 = self.client.get(reverse("QuestLog:logout"))
+        resp3 = self.client.get(reverse("QuestLog:profile"))
+        self.assertEqual(resp1.status_code, 200)
+        self.assertEqual(resp2.status_code, 302)#logout
+        self.assertEqual(resp3.status_code, 302)
+
+
     def test_login_uses_safe_next_redirect(self):
         user = self.create_user("liljit")
 
