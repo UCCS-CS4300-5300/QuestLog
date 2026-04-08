@@ -1,7 +1,8 @@
             <div class="card border-0">
                 <div class="card-body text-center">
 
-                    <!-- {% csrf_token %} -->
+                    {% csrf_token %}
+                    <!-- {{ profile.pk }} -->
                     {% if profile.profile_picture %}
                         <img  src="{{ profile.profile_picture.url }}"
                               class="rounded-circle mb-3"

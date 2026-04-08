@@ -19,6 +19,7 @@ class UserProfile(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="profile",
+        primary_key = True,
     )
     display_name = models.CharField(max_length=150)
     profile_picture = models.ImageField(
