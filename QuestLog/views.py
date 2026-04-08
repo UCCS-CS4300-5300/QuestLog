@@ -1,17 +1,21 @@
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
+import json
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import FileResponse, Http404, HttpResponseForbidden, response
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
+from rest_framework.response import Response
+from rest_framework.renderers import JSONRenderer
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
+from .serializers import updateProfile
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -169,7 +173,25 @@ def serve_media(request, path):
 
 @login_required(login_url="QuestLog:login")
 def profile(request):
-    return renderPage(request, "profile.html")
+    if request.method == "POST":
+        flag = True
+        try:
+            data = json.loads(request.body)
+        except ValueError:
+            flag = False
+        if flag: #flag is true if json parsed correctly
+            serializer = updateProfile(data=data)
+        if flag and serializer.is_valid():
+            serializer.save()
+            resp = Response(serializer.data, status=201)
+        else:
+            resp = Response(serializer.errors, status=400)
+        resp.accepted_renderer = JSONRenderer()
+        resp.accepted_media_type = 'application/json'
+        resp.renderer_context = {'request': request}
+        return resp
+    else:
+        return renderPage(request, "profile.html")
 
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
