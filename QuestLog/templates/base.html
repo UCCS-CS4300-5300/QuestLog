@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -59,7 +59,7 @@
         <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
       </li>
       <li class="nav-item">
-        <button class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleTheme()">Theme Toggle</button>
+        <button class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleTheme()"> 🌙 / ☀️ </button>
       </li>
     </ul>
   </div>
@@ -69,10 +69,15 @@
   </div>
 
 <script>
+   //apply the saved theme immediately
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-bs-theme', saved);
+
   function toggleTheme() {
-    const html = document.documentElement;
-    const current = html.getAttribute('data-bs-theme');
-    html.setAttribute('data-bs-theme', current === 'dark' ? 'light' : 'dark');
+    const current = document.documentElement.getAttribute('data-bs-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-bs-theme', next);
+    localStorage.setItem('theme', next);
   }
 </script>
 </body>
