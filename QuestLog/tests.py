@@ -8,6 +8,7 @@ from io import BytesIO
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
@@ -189,6 +190,33 @@ class UrlConfigurationTests(SimpleTestCase):
 class UserProfileTests(TestCase):
     def test_user_model_stays_on_django_auth_user(self):
         self.assertEqual(get_user_model()._meta.label, "auth.User")
+
+    def test_user_profile_uses_user_id_as_primary_key(self):
+        self.assertEqual(UserProfile._meta.pk.name, "user")
+        self.assertEqual(UserProfile._meta.pk.attname, "user_id")
+
+    def test_database_schema_keeps_user_id_as_a_unique_profile_identifier(self):
+        with connection.cursor() as cursor:
+            columns = {
+                column.name
+                for column in connection.introspection.get_table_description(
+                    cursor,
+                    UserProfile._meta.db_table,
+                )
+            }
+            constraints = connection.introspection.get_constraints(
+                cursor,
+                UserProfile._meta.db_table,
+            )
+
+        self.assertIn("user_id", columns)
+        self.assertTrue(
+            any(
+                constraint.get("primary_key") or constraint.get("unique")
+                for constraint in constraints.values()
+                if constraint.get("columns") == ["user_id"]
+            )
+        )
 
     def test_create_user_creates_profile_with_default_display_name(self):
         user = get_user_model().objects.create_user(
