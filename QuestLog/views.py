@@ -180,15 +180,21 @@ def profile(request):
         except ValueError:
             flag = False
         if flag: #flag is true if json parsed correctly
-            serializer = updateProfile(data=data)
-        if flag and serializer.is_valid():
-            serializer.save()
-            resp = Response(serializer.data, status=201)
+            user = UserProfile.objects.get(pk=request.user.pk)
+            serializer = updateProfile(user, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                resp = Response(serializer.data, status=201)
+            else:
+                print(serializer.errors)
+                resp = Response(serializer.errors, status=400)
         else:
-            resp = Response(serializer.errors, status=400)
+            resp = Response("Bad json", status=500)
+
         resp.accepted_renderer = JSONRenderer()
         resp.accepted_media_type = 'application/json'
         resp.renderer_context = {'request': request}
+
         return resp
     else:
         return renderPage(request, "profile.html")
