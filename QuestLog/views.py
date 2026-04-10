@@ -15,7 +15,7 @@ from rest_framework.renderers import JSONRenderer
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
-from .serializers import updateProfile
+from .serializers import updateUser, updateProfile
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -184,7 +184,7 @@ def profile(request):
             serializer = updateProfile(user, data=data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                resp = Response(serializer.data, status=201)
+                resp = Response(serializer.data, status=200)
             else:
                 print(serializer.errors)
                 resp = Response(serializer.errors, status=400)
