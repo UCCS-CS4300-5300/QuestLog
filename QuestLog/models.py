@@ -19,7 +19,6 @@ class UserProfile(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="profile",
-        primary_key = True,
     )
     display_name = models.CharField(max_length=150)
     profile_picture = models.ImageField(
@@ -112,12 +111,12 @@ class Reward(models.Model):
     class_attributes = models.CharField(default="To be determined",max_length=100)
 
 class PartySecret(models.Model):
-    _secret_hash = models.CharField(max_length=128, editable=False) 
+    _secret_hash = models.CharField(max_length=128, editable=False)
 
     def set_secret(self, raw_secret):
-        self._secret_hash = make_password(raw_secret) 
+        self._secret_hash = make_password(raw_secret)
         self.save(update_fields=["_secret_hash"])
-        
+
     def check_secret(self,raw_secret):
         return check_password(raw_secret,self._secret_hash)
 
@@ -127,15 +126,15 @@ class Party(models.Model):
     party_name = models.CharField(max_length=200)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="parties")
     creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  #Admin
-    secret = models.OneToOneField(PartySecret,on_delete=models.PROTECT,null=True,blank=True) 
-    # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation                                 
+    secret = models.OneToOneField(PartySecret,on_delete=models.PROTECT,null=True,blank=True)
+    # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation
 
 class UserPoints(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     party = models.ForeignKey(Party, on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward, on_delete=models.PROTECT)
-    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) 
+    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file])
 
     class Meta:
         constraints = [
