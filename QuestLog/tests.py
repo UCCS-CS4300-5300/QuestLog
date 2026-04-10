@@ -190,6 +190,10 @@ class UserProfileTests(TestCase):
     def test_user_model_stays_on_django_auth_user(self):
         self.assertEqual(get_user_model()._meta.label, "auth.User")
 
+    def test_user_profile_uses_user_id_as_primary_key(self):
+        self.assertEqual(UserProfile._meta.pk.name, "user")
+        self.assertEqual(UserProfile._meta.pk.attname, "user_id")
+
     def test_create_user_creates_profile_with_default_display_name(self):
         user = get_user_model().objects.create_user(
             username="liljit",
