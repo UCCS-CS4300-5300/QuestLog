@@ -17,6 +17,8 @@ from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
 from .serializers import updateUser, updateProfile
 
+import json
+
 def get_request_hosts(request):
     request_host = request.get_host()
     request_hostname = urlsplit(f"//{request_host}").hostname
@@ -174,23 +176,30 @@ def serve_media(request, path):
 @login_required(login_url="QuestLog:login")
 def profile(request):
     if request.method == "POST":
+        # We attempt to parse the json. Flag indicates success or failure
         flag = True
         try:
             data = json.loads(request.body)
         except ValueError:
             flag = False
-        if flag: #flag is true if json parsed correctly
+
+        # keys that are allowed
+        allowed_keys = {"display_name", "email"}
+
+        #flag is true if json parsed correctly and there are no unauthorized keys
+        if flag and set(data).issubset(allowed_keys):
+            #deserialize
             user = UserProfile.objects.get(pk=request.user.pk)
             serializer = updateProfile(user, data=data, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 resp = Response(serializer.data, status=200)
             else:
-                print(serializer.errors)
                 resp = Response(serializer.errors, status=400)
         else:
-            resp = Response("Bad json", status=500)
+            resp = Response("Bad json", status=400)
 
+        #create response
         resp.accepted_renderer = JSONRenderer()
         resp.accepted_media_type = 'application/json'
         resp.renderer_context = {'request': request}

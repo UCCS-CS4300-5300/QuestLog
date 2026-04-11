@@ -17,8 +17,9 @@ from .forms import QuestLogUserCreationForm
 from .models import UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
+import json
 
-EXPECTED_VIEW_STATUSES = {
+EXPECTED_VIEW_GET_STATUSES = {
     "home": 200,
     "about": 200,
     "tasks": 200,
@@ -34,18 +35,31 @@ EXPECTED_VIEW_STATUSES = {
     'create_party': 302,
 }
 
+EXPECTED_VIEW_POST_STATUSES = {
+    "profile": 302
+}
+
 
 class ViewReachabilityTests(TestCase):
     def assert_view_status(self, view_name, expected_status=200):
         response = self.client.get(reverse(f"QuestLog:{view_name}"))
         self.assertEqual(response.status_code, expected_status)
 
+    def assert_view_status(self, view_name, expected_status=200):
+        response = self.client.post(reverse(f"QuestLog:{view_name}"))
+        self.assertEqual(response.status_code, expected_status)
+
     def test_all_named_urls_are_accounted_for(self):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
-        self.assertEqual(discovered_names, set(EXPECTED_VIEW_STATUSES))
+        self.assertEqual(discovered_names, set(EXPECTED_VIEW_GET_STATUSES))
 
     def test_all_named_urls_return_expected_status_codes(self):
-        for view_name, expected_status in EXPECTED_VIEW_STATUSES.items():
+        #get statuses when not signed in
+        for view_name, expected_status in EXPECTED_VIEW_GET_STATUSES.items():
+            with self.subTest(view_name=view_name):
+                self.assert_view_status(view_name, expected_status)
+        #post statuses when not signed in
+        for view_name, expected_status in EXPECTED_VIEW_POST_STATUSES.items():
             with self.subTest(view_name=view_name):
                 self.assert_view_status(view_name, expected_status)
 
@@ -212,6 +226,27 @@ class UserProfileTests(TestCase):
 
         self.assertEqual(str(user.profile), "liljitdisplay")
 
+    def test_profile_post_all_entries(self):
+        user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
+        self.client.force_login(user)
+        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname", "email": "test3@example.com", }), content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_user_profile(user).display_name, "testname")
+        self.assertEqual(user.email, "test3@example.com")
+
+    def test_profile_post_partial_entries(self):
+        user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
+        self.client.force_login(user)
+        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname"}), content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_user_profile(user).display_name, "testname")
+
+    def test_profile_post_bad(self):
+        user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
+        self.client.force_login(user)
+        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"ghjghkjghj": "testname"}), content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
 
 class AuthenticationFlowTests(TestCase):
     VALID_PASSWORD = "LilJitsPass67"
@@ -286,7 +321,8 @@ class AuthenticationFlowTests(TestCase):
         display_name="liljitdisplay",
         email="",
         profile_picture=None,
-    ):
+    ):# params to this function are multiline
+
         user = get_user_model().objects.create_user(
             username=username,
             password=password,
@@ -297,7 +333,7 @@ class AuthenticationFlowTests(TestCase):
         if profile_picture is not None:
             profile.profile_picture = profile_picture
         profile.save()
-        return user
+        return user #returns a instance of djangos built in user model
 
     def test_register_creates_user_profile_and_logs_them_in(self):
         response = self.client.post(
