@@ -17,8 +17,6 @@ from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
 from .serializers import updateUser, updateProfile, updateUser
 
-import json
-
 def get_request_hosts(request):
     request_host = request.get_host()
     request_hostname = urlsplit(f"//{request_host}").hostname
