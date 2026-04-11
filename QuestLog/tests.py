@@ -41,11 +41,11 @@ EXPECTED_VIEW_POST_STATUSES = {
 
 
 class ViewReachabilityTests(TestCase):
-    def assert_view_status(self, view_name, expected_status=200):
+    def assert_view_get_status(self, view_name, expected_status=200):
         response = self.client.get(reverse(f"QuestLog:{view_name}"))
         self.assertEqual(response.status_code, expected_status)
 
-    def assert_view_status(self, view_name, expected_status=200):
+    def assert_view_post_status(self, view_name, expected_status=200):
         response = self.client.post(reverse(f"QuestLog:{view_name}"))
         self.assertEqual(response.status_code, expected_status)
 
@@ -57,11 +57,11 @@ class ViewReachabilityTests(TestCase):
         #get statuses when not signed in
         for view_name, expected_status in EXPECTED_VIEW_GET_STATUSES.items():
             with self.subTest(view_name=view_name):
-                self.assert_view_status(view_name, expected_status)
+                self.assert_view_get_status(view_name, expected_status)
         #post statuses when not signed in
         for view_name, expected_status in EXPECTED_VIEW_POST_STATUSES.items():
             with self.subTest(view_name=view_name):
-                self.assert_view_status(view_name, expected_status)
+                self.assert_view_post_status(view_name, expected_status)
 
     def test_profile_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:profile"))
