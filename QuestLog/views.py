@@ -15,7 +15,7 @@ from rest_framework.renderers import JSONRenderer
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
-from .serializers import updateUser, updateProfile
+from .serializers import updateUser, updateProfile, updateUser
 
 import json
 
@@ -188,16 +188,18 @@ def profile(request):
 
         #flag is true if json parsed correctly and there are no unauthorized keys
         if flag and set(data).issubset(allowed_keys):
-            #deserialize
-            user = UserProfile.objects.get(pk=request.user.pk)
-            serializer = updateProfile(user, data=data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                resp = Response(serializer.data, status=200)
+            #deserialize (user and userprofile need two seperate serializers since they are seperate models)
+            userPro = UserProfile.objects.get(pk=request.user.pk)
+            userProfileSerializer = updateProfile(userPro, data=data, partial=True)
+            userSerializer = updateUser(request.user, data=data, partial=True)
+            if userProfileSerializer.is_valid() and userSerializer.is_valid():
+                userProfileSerializer.save()
+                userSerializer.save()
+                resp = Response(userProfileSerializer.data | userSerializer.data, status=200)
             else:
-                resp = Response(serializer.errors, status=400)
+                resp = Response(userProfileSerializer.errors | userSerializer.errors, status=400)
         else:
-            resp = Response("Bad json", status=400)
+            resp = Response("Bad json or unknown keys", status=400)
 
         #create response
         resp.accepted_renderer = JSONRenderer()

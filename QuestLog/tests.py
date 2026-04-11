@@ -232,6 +232,7 @@ class UserProfileTests(TestCase):
         resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname", "email": "test3@example.com", }), content_type="application/json")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(get_user_profile(user).display_name, "testname")
+        user = get_user_model().objects.get(pk=user.pk)
         self.assertEqual(user.email, "test3@example.com")
 
     def test_profile_post_partial_entries(self):
@@ -319,7 +320,7 @@ class AuthenticationFlowTests(TestCase):
         username,
         password=VALID_PASSWORD,
         display_name="liljitdisplay",
-        email="",
+        email="user@example.com",
         profile_picture=None,
     ):# params to this function are multiline
 

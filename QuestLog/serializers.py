@@ -16,11 +16,10 @@ class updateUser(serializers.ModelSerializer):
         return instance
 
 class updateProfile(serializers.ModelSerializer):
-    user = updateUser()
 
     class Meta:
         model = UserProfile
-        fields = ['user','display_name']
+        fields = ['display_name']
 
     def update(self, instance, validated_data):
         instance.display_name = validated_data.get('display_name', instance.display_name)
