@@ -15,7 +15,7 @@ from rest_framework.renderers import JSONRenderer
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
-from .serializers import updateUser, updateProfile, updateUser
+from .serializers import updateUser, updateProfile
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -187,7 +187,7 @@ def profile(request):
         #flag is true if json parsed correctly and there are no unauthorized keys
         if flag and set(data).issubset(allowed_keys):
             #deserialize (user and userprofile need two seperate serializers since they are seperate models)
-            userPro = UserProfile.objects.get(pk=request.user.pk)
+            userPro = UserProfile.objects.get(user=request.user)
             userProfileSerializer = updateProfile(userPro, data=data, partial=True)
             userSerializer = updateUser(request.user, data=data, partial=True)
             if userProfileSerializer.is_valid() and userSerializer.is_valid():
