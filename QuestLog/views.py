@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
+from django.db import transaction
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
 from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
@@ -191,8 +192,10 @@ def profile(request):
             userProfileSerializer = updateProfile(userPro, data=data, partial=True)
             userSerializer = updateUser(request.user, data=data, partial=True)
             if userProfileSerializer.is_valid() and userSerializer.is_valid():
-                userProfileSerializer.save()
-                userSerializer.save()
+                with transaction.atomic():
+                    userProfileSerializer.save()
+                    userSerializer.save()
+
                 resp = Response(userProfileSerializer.data | userSerializer.data, status=200)
             else:
                 resp = Response(userProfileSerializer.errors | userSerializer.errors, status=400)
