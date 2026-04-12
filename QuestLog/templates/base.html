@@ -69,23 +69,11 @@
           <a class="nav-link" href="{% url 'QuestLog:login' %}">Login</a>
         </li>
       {% endif %}
-    <ul class="navbar-nav ms-auto">
-      <li class="nav-item">
-        <button class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleTheme()">Theme Toggle</button>
-      </li>
-    </ul>
   </div>
 </nav>
   <div class="container py-4">
     {% block content %}{% endblock %}
   </div>
 
-<script>
-  function toggleTheme() {
-    const html = document.documentElement;
-    const current = html.getAttribute('data-bs-theme');
-    html.setAttribute('data-bs-theme', current === 'dark' ? 'light' : 'dark');
-  }
-</script>
 </body>
 </html>
