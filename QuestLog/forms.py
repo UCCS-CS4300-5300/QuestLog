@@ -128,6 +128,7 @@ class InviteUserForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.party = party
         self.invited_by = invited_by
+        self.invited_user = None
 
     def clean_username(self):
         username = self.cleaned_data["username"].strip()
@@ -142,5 +143,7 @@ class InviteUserForm(forms.Form):
 
         if self.invited_by and invited_user.pk == self.invited_by.pk:
             raise forms.ValidationError("You cannot invite yourself.")
+        #Store the user object for use in the view after form validation
+        self.invited_user = invited_user
 
         return invited_user

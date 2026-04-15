@@ -12,7 +12,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
-from django.db import IntegrityError
 
 from .forms import QuestLogUserCreationForm
 from .models import UserProfile, get_user_profile, profile_picture_upload_to, Party, PartyInvitation, Reward, UserPoints
@@ -1241,7 +1240,7 @@ class PartyInvitationWorkflowTests(TestCase):
         )
 
         self.client.force_login(self.invited_user)
-        response = self.client.get(
+        response = self.client.post(
             reverse("QuestLog:accept_party_invitation", args=[invitation.id])
         )
 
@@ -1265,7 +1264,7 @@ class PartyInvitationWorkflowTests(TestCase):
         )
 
         self.client.force_login(self.invited_user)
-        self.client.get(reverse("QuestLog:accept_party_invitation", args=[invitation.id]))
+        self.client.post(reverse("QuestLog:accept_party_invitation", args=[invitation.id]))
 
         self.assertTrue(
             UserPoints.objects.filter(
@@ -1289,7 +1288,7 @@ class PartyInvitationWorkflowTests(TestCase):
         )
 
         self.client.force_login(self.invited_user)
-        response = self.client.get(
+        response = self.client.post(
             reverse("QuestLog:decline_party_invitation", args=[invitation.id])
         )
 
@@ -1313,7 +1312,7 @@ class PartyInvitationWorkflowTests(TestCase):
         )
 
         self.client.force_login(self.other_user)
-        response = self.client.get(
+        response = self.client.post(
             reverse("QuestLog:accept_party_invitation", args=[invitation.id])
         )
 

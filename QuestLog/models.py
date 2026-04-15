@@ -91,7 +91,7 @@ def getParties(user):
 def getPartyDetails(user, guid):
     try:
         party = Party.objects.get(guid=guid)
-    except Party.DoesNotExits:
+    except Party.DoesNotExist:
         return None
     
     if party.members.filter(pk=user.pk).exists():

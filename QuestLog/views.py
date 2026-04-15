@@ -14,6 +14,7 @@ from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_s
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.db import transaction
+from django.views.decorators.http import require_POST
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm, CreatePartyForm, InviteUserForm
 from .models import UserProfile, Party, PartyInvitation, Reward, UserPoints, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
@@ -92,7 +93,7 @@ def renderPage(request, page):
 
         return render(request, page, data)
     else:
-        
+
         return render(request, page)
     
 def home(request):
@@ -239,32 +240,33 @@ def party_details(request):
     if request.method == "POST":
         invite_form = InviteUserForm(request.POST, party=party, invited_by=request.user)
         if invite_form.is_valid():
-            invited_user = invite_form.cleaned_data["username"]
+            invited_user = invite_form.invited_user
 
-            invitation, created = PartyInvitation.objects.get_or_create(
-                party=party,
-                invited_user=invited_user,
-                defaults={
-                    "invited_by": request.user,
-                    "status": PartyInvitation.Status.PENDING,
-                },
-            )
+            with transaction.atomic():
+                invitation, created = PartyInvitation.objects.get_or_create(
+                    party=party,
+                    invited_user=invited_user,
+                    defaults={
+                        "invited_by": request.user,
+                        "status": PartyInvitation.Status.PENDING,
+                    },
+                )
 
-            if created:
-                messages.success(request, f"{invited_user.username} has been invited to {party.party_name}.")
-            else:
-                if invitation.status == PartyInvitation.Status.PENDING:
-                    messages.warning(request, f"{invited_user.username} already has a pending invitation.")
-                elif invitation.status == PartyInvitation.Status.ACCEPTED:
-                    messages.warning(request, f"{invited_user.username} is already in this party.")
+                if created:
+                    messages.success(request, f"{invited_user.username} has been invited to {party.party_name}.")
                 else:
-                    invitation.status = PartyInvitation.Status.PENDING
-                    invitation.invited_by = request.user
-                    invitation.responded_at = None
-                    invitation.save(update_fields=["status", "invited_by", "responded_at"])
-                    messages.success(request, f"A new invitation was sent to {invited_user.username}.")
+                    if invitation.status == PartyInvitation.Status.PENDING:
+                        messages.warning(request, f"{invited_user.username} already has a pending invitation.")
+                    elif invitation.status == PartyInvitation.Status.ACCEPTED:
+                        messages.warning(request, f"{invited_user.username} is already in this party.")
+                    else:
+                        invitation.status = PartyInvitation.Status.PENDING
+                        invitation.invited_by = request.user
+                        invitation.responded_at = None
+                        invitation.save(update_fields=["status", "invited_by", "responded_at"])
+                        messages.success(request, f"A new invitation was sent to {invited_user.username}.")
 
-            return redirect(f"{reverse('QuestLog:party_details')}?guid={party.guid}")
+                return redirect(f"{reverse('QuestLog:party_details')}?guid={party.guid}")
 
     context = {
         "profile": get_user_profile(request.user),
@@ -358,6 +360,7 @@ def create_party(request):
 
 
 @login_required(login_url="QuestLog:login")
+@require_POST
 def accept_party_invitation(request, invitation_id):
     invitation = get_object_or_404(
         PartyInvitation.objects.select_related("party", "invited_user"),
@@ -393,6 +396,7 @@ def accept_party_invitation(request, invitation_id):
 
 
 @login_required(login_url="QuestLog:login")
+@require_POST
 def decline_party_invitation(request, invitation_id):
     invitation = get_object_or_404(
         PartyInvitation.objects.select_related("party", "invited_user"),
