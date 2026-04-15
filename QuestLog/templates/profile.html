@@ -1,10 +1,197 @@
 {% extends 'base.html' %}
 {% block title %} Profile | Quest Log {% endblock %}
-
 {% block content %}
-    <div class="row justify-content-center" >
-        <div class="col-md-8  col-lg-6">
-            {% include 'profilebase.html' %}
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card border-0">
+                <div class="card-body text-center">
+                    <!-- show uploaded profile picture if it exists (will revist this again due to small issue with uplaoding pictures)-->
+                    {% if profile.profile_picture %}
+                        <img src="{{ profile.profile_picture.url }}"
+                             class="rounded-circle mb-3"
+                             alt="{{ profile.display_name|default:request.user.username }} profile picture"
+                             style="width: 120px; height: 120px; object-fit: cover;">
+                    {% else %}
+                    <!-- fallback -->
+                        <div class="bg-secondary-subtle rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                             style="width: 120px; height: 120px;">
+                            <span class="fs-2 fw-bold text-secondary">
+                                {{ profile.display_name|default:request.user.username|first|upper }}
+                            </span>
+                        </div>
+                    {% endif %}
+                    <!-- heading updates after the save works (refresh and it should still save) -->
+                    <h1 class="h3" id="profile-heading">
+                        {{ profile.display_name|default:request.user.username }}
+                    </h1>
+                    <p class="text-muted mb-4">Quest Log profile</p>
+                    <div class="text-start mb-4">
+                        <h5>Account Information</h5>
+                        <!-- only read view (user pov)-->
+                        <div id="profile-view-mode">
+                            <p>
+                                <strong>Display Name:</strong>
+                                <span id="display-name-text">{{ profile.display_name|default:request.user.username }}</span>
+                            </p>
+                            <p>
+                                <strong>Username:</strong> {{ request.user.username }}
+                            </p>
+                            <p>
+                                <strong>Email:</strong>
+                                <span id="email-text">{{ request.user.email|default:"Not provided" }}</span>
+                            </p>
+                        </div>
+                        <!-- edit view -->
+                        <div id="profile-edit-mode" style="display: none;">
+                            <div class="mb-3">
+                                <label for="display-name-input" class="form-label"><strong>Display Name</strong></label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="display-name-input"
+                                       value="{{ profile.display_name|default:request.user.username }}"
+                                       maxlength="150">
+                            </div>
+                            <div class="mb-3">
+                                <label for="email-input" class="form-label"><strong>Email</strong></label>
+                                <input type="email"
+                                       class="form-control"
+                                       id="email-input"
+                                       value="{{ request.user.email }}">
+                            </div>
+                            <!-- username is shwon ehre too, also username is not editable -->
+                            <p class="mb-3">
+                                <strong>Username:</strong> {{ request.user.username }}
+                            </p>
+                        </div>
+                        <!-- success/error message -->
+                        <div id="profile-message" class="alert d-none mt-3" role="alert"></div>
+
+                        <!-- save button and switching -->
+                        <div class="d-flex gap-2 mt-3">
+                            <button type="button" class="btn btn-primary" id="edit-btn">Edit</button>
+                            <button type="button" class="btn btn-success" id="save-btn" style="display: none;">Save</button>
+                            <button type="button" class="btn btn-outline-secondary" id="cancel-btn" style="display: none;">Cancel</button>
+                        </div>
+                    </div>
+                    <!-- badges section, nothing new -->
+                    <div class="text-start">
+                        <h5>Badges</h5>
+                        <p class="text-muted mb-0">No badges earned yet.</p>
+                    </div>
+                    <a class="nav-link mt-3" href="{% url 'QuestLog:logout' %}">Logout</a>
+                </div>
+            </div>
         </div>
     </div>
+
+    <script>
+        //get main elements needed (DOM elements)
+        const viewMode = document.getElementById("profile-view-mode");
+        const editMode =document.getElementById("profile-edit-mode");
+        const editBtn = document.getElementById("edit-btn");
+        const saveBtn = document.getElementById("save-btn");
+        const cancelBtn =document.getElementById("cancel-btn");
+        const nameText =document.getElementById("display-name-text");
+        const emailText =document.getElementById("email-text");
+        const heading =document.getElementById("profile-heading");
+        const nameInput =document.getElementById("display-name-input");
+        const emailInput =document.getElementById("email-input");
+        const msgBox =document.getElementById("profile-message");
+        //show bootstrap message
+        function showMsg(text, type) {
+            msgBox.textContent =text;
+            msgBox.className = `alert alert-${type} mt-3`;
+        }
+        //hide message area
+        function clearMsg() {
+            msgBox.textContent = "";
+            msgBox.className ="alert d-none mt-3";
+        }
+        //from read to edit mode
+        function enterEdit() {
+            clearMsg();
+            viewMode.style.display ="none";
+            editMode.style.display="block";
+            editBtn.style.display ="none";
+            saveBtn.style.display ="inline-block";
+            cancelBtn.style.display ="inline-block";
+        }
+        function exitEdit() { //edit back to read only mode
+            viewMode.style.display = "block";
+            editMode.style.display = "none";
+            editBtn.style.display = "inline-block";
+            saveBtn.style.display= "none";
+            cancelBtn.style.display = "none";
+        }
+        //grab django csrf token from the cookie
+        function getCookie(name){
+            let value =null;
+            if (document.cookie) {
+                document.cookie.split(";").forEach(c => {
+                    c =c.trim();
+                    if (c.startsWith(name +"="))
+                        value =decodeURIComponent(c.slice(name.length + 1));
+                });
+            }
+            return value;
+        }
+
+        //when editing (edit is clicked) show the form inputs
+        editBtn.addEventListener("click", enterEdit);
+
+        //when cancel is clicked restore to what was oringally there before editing
+        //also goes back to read only mode
+        cancelBtn.addEventListener("click", function () {
+            nameInput.value = nameText.textContent.trim();
+            emailInput.value= emailText.textContent.trim() === "Not provided" ? "" : emailText.textContent.trim();
+            clearMsg();
+            exitEdit();
+        });
+
+        //when the user presses save
+        //validate input, send POST request to django, refresh/update the page text if it all goes through well
+        saveBtn.addEventListener("click", async function () {
+            clearMsg();
+            const newName = nameInput.value.trim();
+            const newEmail = emailInput.value.trim();
+            // client side validation
+            if (!newName) {
+                showMsg("Display Name Cannot be Empty!!!", "danger");
+                return;
+            }
+            //disable buttons while the request is in progress
+            saveBtn.disabled =true;
+            cancelBtn.disabled =true;
+            saveBtn.textContent ="Saving...";
+            try {
+                //send the new updated profile data to django 
+                const resp = await fetch(window.origin + "{% url 'QuestLog:profile' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json; charset=UTF-8",
+                        "X-CSRFToken": getCookie("csrftoken")},
+
+                    body: JSON.stringify({ display_name: newName, email: newEmail }) });
+                const data = await resp.json();
+                
+                //error emssage if django rejects request
+                if (!resp.ok) {
+                    showMsg("Could Not Save.  Please Check Your Input and Try Again.", "danger");
+                    return;
+                }
+                //update visible text with what the server confirmed
+                nameText.textContent =data.display_name || newName;
+                emailText.textContent = data.email || newEmail || "Not provided";
+                heading.textContent =data.display_name || newName;
+                showMsg("Profile Updated.","success");
+                exitEdit();
+            } catch (err) {
+                showMsg("Something Went Wrong. Please Try Again .", "danger");
+            } finally {
+                saveBtn.disabled    = false;
+                cancelBtn.disabled  = false;
+                saveBtn.textContent = "Save";
+            }
+        });
+    </script>
 {% endblock %}
