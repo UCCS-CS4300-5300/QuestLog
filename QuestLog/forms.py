@@ -99,3 +99,48 @@ class QuestLogAuthenticationForm(AuthenticationForm):
         strip=False,
         widget=forms.PasswordInput(attrs={"placeholder": "Enter your password"}),
     )
+
+class CreatePartyForm(forms.Form):
+    party_name = forms.CharField(
+        max_length=200,
+        widget=forms.TextInput(attrs={"placeholder": "Enter a party name"}),
+    )
+    invited_username = forms.CharField(
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={"placeholder": "Optional: invite a user by username"}),
+    )
+
+    def clean_party_name(self):
+        party_name = self.cleaned_data["party_name"].strip()
+        if not party_name:
+            raise forms.ValidationError("Party name cannot be blank.")
+        return party_name
+
+
+class InviteUserForm(forms.Form):
+    username = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={"placeholder": "Enter a username to invite"}),
+    )
+
+    def __init__(self, *args, party=None, invited_by=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.party = party
+        self.invited_by = invited_by
+
+    def clean_username(self):
+        username = self.cleaned_data["username"].strip()
+
+        try:
+            invited_user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise forms.ValidationError("No user with that username exists.")
+
+        if self.party and self.party.members.filter(pk=invited_user.pk).exists():
+            raise forms.ValidationError("That user is already a member of this party.")
+
+        if self.invited_by and invited_user.pk == self.invited_by.pk:
+            raise forms.ValidationError("You cannot invite yourself.")
+
+        return invited_user

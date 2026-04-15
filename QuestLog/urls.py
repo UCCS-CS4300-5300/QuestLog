@@ -21,4 +21,8 @@ urlpatterns = [
     path('create_party/', views.create_party, name='create_party'),
     path('upload/', views.upload_task_proof, name='upload_task_proof'),
 
+    #party invitation routes
+    path('party_invitations/<int:invitation_id>/accept/', views.accept_party_invitation, name='accept_party_invitation'),
+    path('party_invitations/<int:invitation_id>/decline/', views.decline_party_invitation, name='decline_party_invitation'),
+
 ]

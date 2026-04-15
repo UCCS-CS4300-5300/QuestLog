@@ -14,6 +14,25 @@
 
   <div class="row g-3">
     <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header fw-semibold">Invite a member</div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="{{ invite_form.username.id_for_label }}" class="form-label">Username</label>
+              {{ invite_form.username }}
+              {% if invite_form.username.errors %}
+                <div class="text-danger small mt-1">
+                  {{ invite_form.username.errors }}
+                </div>
+              {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">Send invitation</button>
+          </form>
+        </div>
+      </div>
+
       <div class="card h-100">
         <div class="card-header fw-semibold">Members</div>
         <div class="card-body">
@@ -30,6 +49,29 @@
             </ul>
           {% else %}
             <div class="text-muted">No members found.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header fw-semibold">Pending invitations</div>
+        <div class="card-body">
+          {% if pending_invites_for_party %}
+            <ul class="list-group list-group-flush">
+              {% for invitation in pending_invites_for_party %}
+                <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-semibold">{{ invitation.invited_user.username }}</div>
+                    <div class="small text-muted">
+                      Invited by {{ invitation.invited_by.username }}
+                    </div>
+                  </div>
+                  <span class="badge text-bg-warning">Pending</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-muted">No pending invitations for this party.</div>
           {% endif %}
         </div>
       </div>
