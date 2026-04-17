@@ -17,7 +17,7 @@ from django.db import transaction
 from django.views.decorators.http import require_POST
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm, CreatePartyForm, InviteUserForm
-from .models import UserProfile, Party, PartyInvitation, Reward, UserPoints, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
+from .models import UserProfile, Party,PartyInvitation, Reward, UserPoints, Task, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
 
 User = get_user_model()
@@ -105,7 +105,25 @@ def about(request):
 
 
 def tasks(request):
-    return renderPage(request, "tasks.html")
+    # if missing then show the party selection screen
+    guid =request.GET.get("guid")
+    if not guid:
+        return renderPage(request, "tasks.html")
+    #if theres a party selected then verify membership and build task pool context
+    party =getPartyDetails(request.user, guid)
+    if party is None:
+        messages.error(request, "Party not found or perhaps you do not have access to it")
+        return redirect("QuestLog:tasks")
+
+    all_tasks =getPartyTasks(party)
+    context={
+        "profile": get_user_profile(request.user) ,
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user) ,
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "party": party,
+        "available_tasks": all_tasks.filter(status=Task.Status.NOT_STARTED) , }
+    return render(request, "tasks.html",context)
 
 
 def complete_task(request):
