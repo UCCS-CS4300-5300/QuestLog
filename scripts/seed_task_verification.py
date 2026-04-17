@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+## ADDS 3 TASKS TO THE VERIFICATION USER
 import os
 import sys
 from pathlib import Path

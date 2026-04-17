@@ -22,7 +22,8 @@ EXPECTED_VIEW_STATUSES = {
     "home": 200,
     "about": 200,
     "tasks": 200,
-    "complete_task": 200,
+    "task_history": 200,
+    "complete_task": 302,
     "login": 200,
     "logout": 302,
     "register": 200,
@@ -756,6 +757,87 @@ class PartyViewsTemplateTests(TestCase):
             creator=self.user,
         )
         self.party.members.add(self.user)
+
+
+class TaskPagesTemplateTests(TestCase):
+    TEST_IMAGE_BYTES = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+        b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+        b"\x00\x02\x02D\x01\x00;"
+    )
+
+    def setUp(self):
+        from .models import Party, Task
+
+        self.Task = Task
+        self.user = get_user_model().objects.create_user(
+            username="taskuser",
+            email="taskuser@example.com",
+            password="test-password",
+        )
+        self.other_user = get_user_model().objects.create_user(
+            username="othertaskuser",
+            email="othertaskuser@example.com",
+            password="test-password",
+        )
+        self.party = Party.objects.create(
+            party_name="Task Party",
+            creator=self.user,
+        )
+        self.party.members.add(self.user, self.other_user)
+
+        self.active_task = Task.objects.create(
+            owner=self.user,
+            title="Open Item",
+            description="This should appear on tasks page only.",
+            status=Task.Status.NOT_STARTED,
+            point_value=5,
+            affiliation=self.party,
+        )
+        self.completed_task = Task.objects.create(
+            owner=self.user,
+            title="Done Item",
+            description="This should appear on task history only.",
+            status=Task.Status.COMPLETED,
+            point_value=10,
+            affiliation=self.party,
+            proofs=SimpleUploadedFile(
+                "proof.gif",
+                self.TEST_IMAGE_BYTES,
+                content_type="image/gif",
+            ),
+        )
+        self.other_users_completed_task = Task.objects.create(
+            owner=self.other_user,
+            title="Other User Done Item",
+            description="Should not appear for logged in user.",
+            status=Task.Status.COMPLETED,
+            point_value=15,
+            affiliation=self.party,
+        )
+
+        self.client.force_login(self.user)
+
+    def test_tasks_view_shows_only_incomplete_tasks_for_logged_in_user(self):
+        response = self.client.get(reverse("QuestLog:tasks"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tasks.html")
+        self.assertContains(response, "Open Item")
+        self.assertNotContains(response, "Done Item")
+        self.assertContains(response, reverse("QuestLog:task_history"))
+
+    def test_task_history_view_shows_only_completed_tasks_for_logged_in_user(self):
+        response = self.client.get(reverse("QuestLog:task_history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tasks_history.html")
+        self.assertContains(response, "Done Item")
+        self.assertNotContains(response, "Open Item")
+        self.assertNotContains(response, "Other User Done Item")
+        self.assertContains(response, self.completed_task.proofs.url)
+        self.assertContains(response, reverse("QuestLog:tasks"))
+        self.assertNotContains(response, "Accept")
 
 class LeaderboardViewTests(TestCase):
     def setUp(self):
