@@ -89,9 +89,14 @@ def getParties(user):
 
 #get party details
 def getPartyDetails(user, guid):
-    if Party.objects.filter(guid=guid).exists() and party.members.filter(pk=user.pk).exists():
+    try:
+        party = Party.objects.get(guid=guid)
+    except Party.DoesNotExist:
+        return None
+    
+    if party.members.filter(pk=user.pk).exists():
         #return details
-        return Party.objects.get(guid=guid)
+        return party
     else:
         #return error
         return None
@@ -106,6 +111,15 @@ def getPartyTasks(party):
 #get party members
 def getPartyMembers(party):
     return party.members.all().order_by("username")
+
+#get pending invitations for a user
+def getPendingPartyInvitations(user):
+    return (
+    PartyInvitation.objects
+    .filter(invited_user=user, status=PartyInvitation.Status.PENDING)
+    .select_related("party", "invited_by")
+    .order_by("-created_at")
+    )
 
 class Reward(models.Model):
     class_attributes = models.CharField(default="To be determined",max_length=100)
@@ -128,6 +142,28 @@ class Party(models.Model):
     creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  #Admin
     secret = models.OneToOneField(PartySecret,on_delete=models.PROTECT,null=True,blank=True)
     # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation
+
+class PartyInvitation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        DECLINED = "declined", "Declined"
+
+    party = models.ForeignKey(Party, on_delete=models.CASCADE, related_name="invitations")
+    invited_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="party_invitations",)
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_party_invitations",)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["party", "invited_user"], name="unique_party_invitation_per_user_per_party")
+        ]
+
+    def __str__(self):
+        return f"{self.invited_user.username} -> {self.party.party_name} ({self.status})"   
+
 
 class UserPoints(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

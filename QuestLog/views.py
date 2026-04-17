@@ -4,19 +4,23 @@ import json
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import FileResponse, Http404
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.db import transaction
+from django.views.decorators.http import require_POST
 
-from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
+from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm, CreatePartyForm, InviteUserForm
+from .models import UserProfile, Party, PartyInvitation, Reward, UserPoints, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
+
+User = get_user_model()
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -78,18 +82,20 @@ def renderPage(request, page):
             "profile": get_user_profile(request.user),
             "party_leaderboards": genLeaderboard(request.user),
             "parties": getParties(request.user),
+            "pending_party_invitations": getPendingPartyInvitations(request.user),
         }
         guid = request.GET.get("guid") or request.GET.get("party") #check to see if there is a party specified
         if guid:
             data["party"] = getPartyDetails(request.user, guid)
-            data["party_members"] = getPartyMembers(data["party"])
-            data["party_tasks"] = getPartyTasks(data["party"])
+            if data["party"] is not None:
+                data["members"] = getPartyMembers(data["party"])
+                data["tasks"] = getPartyTasks(data["party"])
 
         return render(request, page, data)
     else:
 
         return render(request, page)
-
+    
 def home(request):
     return renderPage(request, "home.html")
 
@@ -222,11 +228,192 @@ def parties(request):
 
 @login_required(login_url="QuestLog:login")
 def party_details(request):
-    return renderPage(request, "party_details.html")
+    guid = request.GET.get("guid")
+    party = getPartyDetails(request.user, guid) if guid else None
+
+    if party is None:
+        messages.error(request, "Party not found or you do not have access to it.")
+        return redirect("QuestLog:parties")
+
+    invite_form = InviteUserForm(party=party, invited_by=request.user)
+
+    if request.method == "POST":
+        invite_form = InviteUserForm(request.POST, party=party, invited_by=request.user)
+        if invite_form.is_valid():
+            invited_user = invite_form.invited_user
+
+            with transaction.atomic():
+                invitation, created = PartyInvitation.objects.get_or_create(
+                    party=party,
+                    invited_user=invited_user,
+                    defaults={
+                        "invited_by": request.user,
+                        "status": PartyInvitation.Status.PENDING,
+                    },
+                )
+
+                if created:
+                    messages.success(request, f"{invited_user.username} has been invited to {party.party_name}.")
+                else:
+                    if invitation.status == PartyInvitation.Status.PENDING:
+                        messages.warning(request, f"{invited_user.username} already has a pending invitation.")
+                    elif invitation.status == PartyInvitation.Status.ACCEPTED:
+                        messages.warning(request, f"{invited_user.username} is already in this party.")
+                    else:
+                        invitation.status = PartyInvitation.Status.PENDING
+                        invitation.invited_by = request.user
+                        invitation.responded_at = None
+                        invitation.save(update_fields=["status", "invited_by", "responded_at"])
+                        messages.success(request, f"A new invitation was sent to {invited_user.username}.")
+
+                return redirect(f"{reverse('QuestLog:party_details')}?guid={party.guid}")
+
+    context = {
+        "profile": get_user_profile(request.user),
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user),
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "party": party,
+        "members": getPartyMembers(party),
+        "tasks": getPartyTasks(party),
+        "invite_form": invite_form,
+        "pending_invites_for_party": (
+            PartyInvitation.objects
+            .filter(party=party, status=PartyInvitation.Status.PENDING)
+            .select_related("invited_user", "invited_by")
+            .order_by("-created_at")
+        ),
+    }
+    return render(request, "party_details.html", context)
+
 
 @login_required(login_url="QuestLog:login")
 def create_party(request):
-    return renderPage(request, "create_party.html")
+    form = CreatePartyForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        party_name = form.cleaned_data["party_name"]
+        invited_username = form.cleaned_data["invited_username"].strip()
+
+        with transaction.atomic():
+            # create party
+            party = Party.objects.create(
+                party_name=party_name,
+                creator=request.user,
+            )
+
+            # creator should automatically be added to their own party
+            party.members.add(request.user)
+
+            # creator should have a userpoints row for this party
+            default_reward, _ = Reward.objects.get_or_create(
+                class_attributes="Default Reward"
+            )
+            UserPoints.objects.get_or_create(
+                user=request.user,
+                party=party,
+                defaults={
+                    "points": 0,
+                    "rewards": default_reward,
+                },
+            )
+
+            # optional invite during creation
+            if invited_username:
+                try:
+                    invited_user = User.objects.get(username=invited_username)
+                except User.DoesNotExist:
+                    invited_user = None
+
+                if invited_user is None:
+                    messages.warning(request, "Party created, but the invited username was not found.")
+                elif invited_user.pk == request.user.pk:
+                    messages.warning(request, "Party created. You cannot invite yourself.")
+                elif party.members.filter(pk=invited_user.pk).exists():
+                    messages.warning(request, "Party created. That user is already a member.")
+                else:
+                    PartyInvitation.objects.get_or_create(
+                        party=party,
+                        invited_user=invited_user,
+                        defaults={
+                            "invited_by": request.user,
+                            "status": PartyInvitation.Status.PENDING,
+                        },
+                    )
+                    messages.success(
+                        request,
+                        f"Party created successfully and {invited_user.username} was invited.",
+                    )
+                    return redirect(f"{reverse('QuestLog:party_details')}?guid={party.guid}")
+
+        messages.success(request, "Party created successfully.")
+        return redirect(f"{reverse('QuestLog:party_details')}?guid={party.guid}")
+
+    context = {
+        "profile": get_user_profile(request.user),
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user),
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "form": form,
+    }
+    return render(request, "create_party.html", context)
+
+
+@login_required(login_url="QuestLog:login")
+@require_POST
+def accept_party_invitation(request, invitation_id):
+    invitation = get_object_or_404(
+        PartyInvitation.objects.select_related("party", "invited_user"),
+        pk=invitation_id,
+        invited_user=request.user,
+    )
+
+    if invitation.status != PartyInvitation.Status.PENDING:
+        messages.warning(request, "That invitation has already been handled.")
+        return redirect("QuestLog:profile")
+
+    with transaction.atomic():
+        invitation.party.members.add(request.user)
+
+        default_reward, _ = Reward.objects.get_or_create(
+            class_attributes="Default Reward"
+        )
+        UserPoints.objects.get_or_create(
+            user=request.user,
+            party=invitation.party,
+            defaults={
+                "points": 0,
+                "rewards": default_reward,
+            },
+        )
+
+        invitation.status = PartyInvitation.Status.ACCEPTED
+        invitation.responded_at = timezone.now()
+        invitation.save(update_fields=["status", "responded_at"])
+
+    messages.success(request, f"You joined {invitation.party.party_name}.")
+    return redirect("QuestLog:profile")
+
+
+@login_required(login_url="QuestLog:login")
+@require_POST
+def decline_party_invitation(request, invitation_id):
+    invitation = get_object_or_404(
+        PartyInvitation.objects.select_related("party", "invited_user"),
+        pk=invitation_id,
+        invited_user=request.user,
+    )
+
+    if invitation.status != PartyInvitation.Status.PENDING:
+        messages.warning(request, "That invitation has already been handled.")
+        return redirect("QuestLog:profile")
+
+    invitation.status = PartyInvitation.Status.DECLINED
+    invitation.responded_at = timezone.now()
+    invitation.save(update_fields=["status", "responded_at"])
+
+    messages.info(request, f"You declined the invitation to {invitation.party.party_name}.")
+    return redirect("QuestLog:profile")
 
 
 def upload_task_proof(request):

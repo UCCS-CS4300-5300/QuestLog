@@ -1,52 +1,93 @@
-            <div class="card border-0">
-                <div class="card-body text-center">
+<div class="card border-0">
+    <div class="card-body text-center">
 
-                    {% if profile.profile_picture %}
-                        <img  src="{{ profile.profile_picture.url }}"
-                              class="rounded-circle mb-3"
-                              alt="{{ profile.display_name|default:request.user.username }} profile picture"
-                              style="width: 120px; height: 120px; object-fit: cover;">
-                    {% else %}
-                        <div class="bg-secondary-subtle rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
-                             style="width: 120px; height: 120px;">
-                            <span class="fs-2 fw-bold text-secondary">
-                                {{ profile.display_name|default:request.user.username|first|upper }}
-                            </span>
-                        </div>
-                    {% endif %}
-
-                    <h1 class="h3" >{{ profile.display_name|default:request.user.username }}</h1>
-
-                    <p class="text-muted mb-4">
-                        Quest Log profile
-                    </p>
-
-                    <div class="text-start mb-4" >
-
-                        <h5>Account Information</h5>
-
-                        <p>
-                            <strong>Display Name:</strong> {{ profile.display_name|default:request.user.username }}
-                        </p>
-
-                        <p>
-                            <strong>Username:</strong> {{ request.user.username }}
-                        </p>
-                        <p>
-                            <strong>Email:</strong> {{ request.user.email|default:"Not provided" }}
-                        </p>
-
-                    </div>
-                    <!-- bagdes-->
-                    <div class="text-start">
-
-                        <h5>Badges</h5>
-
-                        <p class="text-muted mb-0">
-                            No badges earned yet.
-                        </p>
-                    </div>
-                    <a class="nav-link" href="{% url 'QuestLog:logout' %}">Logout</a>
-                </div>
-
+        {% if profile.profile_picture %}
+            <img  src="{{ profile.profile_picture.url }}"
+                    class="rounded-circle mb-3"
+                    alt="{{ profile.display_name|default:request.user.username }} profile picture"
+                    style="width: 120px; height: 120px; object-fit: cover;">
+        {% else %}
+            <div class="bg-secondary-subtle rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                    style="width: 120px; height: 120px;">
+                <span class="fs-2 fw-bold text-secondary">
+                    {{ profile.display_name|default:request.user.username|first|upper }}
+                </span>
             </div>
+        {% endif %}
+
+        <h1 class="h3" >{{ profile.display_name|default:request.user.username }}</h1>
+
+        <p class="text-muted mb-4">
+            Quest Log profile
+        </p>
+
+        <div class="text-start mb-4" >
+
+            <h5>Account Information</h5>
+
+            <p>
+                <strong>Display Name:</strong> {{ profile.display_name|default:request.user.username }}
+            </p>
+
+            <p>
+                <strong>Username:</strong> {{ request.user.username }}
+            </p>
+            <p>
+                <strong>Email:</strong> {{ request.user.email|default:"Not provided" }}
+            </p>
+
+        </div>
+        <!-- bagdes-->
+        <div class="text-start">
+
+            <h5>Badges</h5>
+
+            <p class="text-muted mb-0">
+                No badges earned yet.
+            </p>
+        </div>
+
+        <!-- party invitations -->
+        <div class="text-start mb-4">
+
+            <h5>Party Invitations</h5>
+
+            {% if pending_party_invitations %}
+                <div class="list-group">
+                    {% for invitation in pending_party_invitations %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-semibold">{{ invitation.party.party_name }}</div>
+                                    <div class="small text-muted">
+                                        Invited by {{ invitation.invited_by.username }}
+                                    </div>
+                                </div>
+                                <span class="badge text-bg-warning">Pending</span>
+                            </div>
+
+                            <div class="mt-3 d-flex gap-2">
+                                <form method="post" action="{% url 'QuestLog:accept_party_invitation' invitation.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success">Accept</button>
+                                </form>
+
+                                <form method="post" action="{% url 'QuestLog:decline_party_invitation' invitation.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Decline</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">
+                    No pending party invitations.
+                </p>
+            {% endif %}
+        </div>
+        
+        <a class="nav-link" href="{% url 'QuestLog:logout' %}">Logout</a>
+    </div>
+
+</div>
