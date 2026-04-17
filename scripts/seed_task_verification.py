@@ -40,6 +40,11 @@ def run():
     )
     party.members.add(user)
 
+    deleted_count, _ = Task.objects.filter(
+        owner=user,
+        status=Task.Status.COMPLETED,
+    ).delete()
+
     tasks_to_seed = [
         ("Clean floor", "Clean the floor in the living room", 10),
         ("Wash the car", "Go out and wash the car", 15),
@@ -60,6 +65,7 @@ def run():
     print("Seed complete.")
     print(f"Username: {username}")
     print(f"Password: {password}")
+    print(f"Completed tasks removed: {deleted_count}")
     print("Tasks created (or confirmed): 3")
 
 
