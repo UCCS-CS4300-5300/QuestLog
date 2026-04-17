@@ -17,9 +17,12 @@ Feature: Smoke tests for core pages
     When I visit the path "/tasks/"
     Then the response status should be 200
 
-  Scenario: Complete task page is reachable only when a valid task exists for the user, if none then
+  Scenario: Complete task page redirects when no task id is provided
+    Given a Quest Log user exists with username "tasksmoke", display name "Task Smoke", and password "StrongPassword123!"
+    And I am authenticated as "tasksmoke"
     When I visit the path "/complete_task/"
-    Then the response status should be 320
+    Then the response status should be 302
+    And the response should redirect to "/tasks/"
 
   Scenario: Login page is reachable
     When I visit the path "/login/"
