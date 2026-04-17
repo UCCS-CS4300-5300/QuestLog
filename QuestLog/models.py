@@ -144,6 +144,9 @@ class Party(models.Model):
     secret = models.OneToOneField(PartySecret,on_delete=models.PROTECT,null=True,blank=True)
     # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation
 
+    def __str__(self):
+        return self.party_name
+
 class PartyInvitation(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

@@ -13,7 +13,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
-from .forms import QuestLogUserCreationForm
+from .forms import CreateTaskForm, QuestLogUserCreationForm
 from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
@@ -1045,6 +1045,12 @@ class TaskWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "create_task.html")
         self.assertEqual(response.context["selected_party"], self.party)
+
+    def test_create_task_form_uses_party_name_for_affiliation_label(self):
+        form = CreateTaskForm(user=self.creator)
+        affiliation_field = form.fields["affiliation"]
+
+        self.assertEqual(affiliation_field.label_from_instance(self.party), "Quest Makers")
 
     def test_create_task_post_creates_task_and_initial_vote(self):
         self.client.force_login(self.creator)
