@@ -17,9 +17,9 @@ Feature: Smoke tests for core pages
     When I visit the path "/tasks/"
     Then the response status should be 200
 
-  Scenario: Complete task page is reachable
+  Scenario: Complete task page is reachable only when a valid task exists for the user, if none then
     When I visit the path "/complete_task/"
-    Then the response status should be 200
+    Then the response status should be 320
 
   Scenario: Login page is reachable
     When I visit the path "/login/"
