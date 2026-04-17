@@ -31,7 +31,7 @@ EXPECTED_VIEW_STATUSES = {
     'parties': 302,
     'party_details': 302,
     'leaderboard': 302,
-    'upload_task_proof': 302, #because there is no tasks in existance, and we need an index to get here
+    'upload_task_proof': 200,
     'create_party': 302,
 }
 
