@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
-from .models import save_user_profile
+from .models import Party, Task, save_user_profile
 
 User = get_user_model()
 DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
@@ -147,3 +147,85 @@ class InviteUserForm(forms.Form):
         self.invited_user = invited_user
 
         return invited_user
+
+
+class CreateTaskForm(forms.ModelForm):
+    difficulty_rating = forms.IntegerField(
+        min_value=1,
+        max_value=5,
+        widget=forms.NumberInput(
+            attrs={
+                "min": 1,
+                "max": 5,
+                "step": 1,
+            }
+        ),
+    )
+
+    class Meta:
+        model = Task
+        fields = ("affiliation", "name", "description", "difficulty_rating")
+        widgets = {
+            "description": forms.Textarea(
+                attrs={
+                    "rows": 4,
+                    "placeholder": "Describe what needs to get done.",
+                }
+            ),
+            "name": forms.TextInput(
+                attrs={"placeholder": "Enter a task name"}
+            ),
+        }
+        labels = {
+            "affiliation": "Party",
+            "name": "Task name",
+            "description": "Task description",
+            "difficulty_rating": "Starting difficulty",
+        }
+
+    def __init__(self, *args, user=None, selected_party=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        self.fields["affiliation"].queryset = Party.objects.none()
+
+        if user is not None:
+            self.fields["affiliation"].queryset = user.parties.order_by("party_name")
+
+        if selected_party is not None:
+            self.fields["affiliation"].initial = selected_party
+
+        self.fields["affiliation"].empty_label = "Select a party"
+        self.fields["affiliation"].widget.attrs["class"] = "form-select"
+        self.fields["name"].widget.attrs["class"] = "form-control"
+        self.fields["description"].widget.attrs["class"] = "form-control"
+        self.fields["difficulty_rating"].widget.attrs["class"] = "form-control"
+
+    def clean_affiliation(self):
+        party = self.cleaned_data["affiliation"]
+
+        if self.user is None or not self.user.parties.filter(pk=party.pk).exists():
+            raise forms.ValidationError("You can only create tasks for parties you belong to.")
+
+        return party
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if not name:
+            raise forms.ValidationError("Task name cannot be blank.")
+        return name
+
+    def clean_description(self):
+        description = self.cleaned_data["description"].strip()
+        if not description:
+            raise forms.ValidationError("Task description cannot be blank.")
+        return description
+
+
+class TaskDifficultyVoteForm(forms.Form):
+    RATING_CHOICES = [(rating, f"{rating}") for rating in range(1, 6)]
+
+    rating = forms.TypedChoiceField(
+        coerce=int,
+        choices=RATING_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )

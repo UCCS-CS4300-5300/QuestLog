@@ -16,8 +16,8 @@ from rest_framework.renderers import JSONRenderer
 from django.db import transaction
 from django.views.decorators.http import require_POST
 
-from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm, CreatePartyForm, InviteUserForm
-from .models import UserProfile, Party,PartyInvitation, Reward, UserPoints, Task, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
+from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, TaskDifficultyVoteForm
+from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
 
 User = get_user_model()
@@ -115,14 +115,25 @@ def tasks(request):
         messages.error(request, "Party not found or perhaps you do not have access to it")
         return redirect("QuestLog:tasks")
 
-    all_tasks =getPartyTasks(party)
+    available_tasks = list(
+        getPartyTasks(party).filter(status=Task.Status.NOT_STARTED)
+    )
+    party_member_count = party.members.count()
+
+    for task in available_tasks:
+        current_vote = task.get_vote_for_user(request.user)
+        task.current_user_rating = current_vote.rating if current_vote else task.difficulty_rating
+
     context={
         "profile": get_user_profile(request.user) ,
         "party_leaderboards": genLeaderboard(request.user),
         "parties": getParties(request.user) ,
         "pending_party_invitations": getPendingPartyInvitations(request.user),
         "party": party,
-        "available_tasks": all_tasks.filter(status=Task.Status.NOT_STARTED) , }
+        "available_tasks": available_tasks,
+        "difficulty_rating_choices": TaskDifficultyVoteForm.RATING_CHOICES,
+        "party_member_count": party_member_count,
+    }
     return render(request, "tasks.html",context)
 
 
@@ -242,6 +253,82 @@ def leaderboard(request):
 @login_required(login_url="QuestLog:login")
 def parties(request):
     return renderPage(request, "parties.html")
+
+
+@login_required(login_url="QuestLog:login")
+def create_task(request):
+    selected_party = None
+    selected_guid = request.GET.get("guid") or request.POST.get("guid")
+    if selected_guid:
+        selected_party = getPartyDetails(request.user, selected_guid)
+        if selected_party is None:
+            messages.error(request, "Party not found or you do not have access to it.")
+            return redirect("QuestLog:tasks")
+
+    if not request.user.parties.exists():
+        messages.warning(request, "Join or create a party before adding tasks.")
+        return redirect("QuestLog:create_party")
+
+    form = CreateTaskForm(user=request.user, selected_party=selected_party)
+
+    if request.method == "POST":
+        form = CreateTaskForm(request.POST, user=request.user, selected_party=selected_party)
+        if form.is_valid():
+            with transaction.atomic():
+                task = form.save(commit=False)
+                task.owner = request.user
+                task.point_value = task.difficulty_rating
+                task.save()
+
+                TaskDifficultyVote.objects.update_or_create(
+                    task=task,
+                    voter=request.user,
+                    defaults={"rating": task.difficulty_rating},
+                )
+                task.sync_point_value_with_difficulty()
+
+            messages.success(request, f"{task.name} was added to {task.affiliation.party_name}.")
+            return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
+
+    context = {
+        "profile": get_user_profile(request.user),
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user),
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "form": form,
+        "selected_party": selected_party,
+    }
+    return render(request, "create_task.html", context)
+
+
+@login_required(login_url="QuestLog:login")
+@require_POST
+def vote_task_difficulty(request, task_id):
+    task = get_object_or_404(
+        Task.objects.select_related("affiliation"),
+        pk=task_id,
+        affiliation__members=request.user,
+    )
+    form = TaskDifficultyVoteForm(request.POST)
+
+    if not form.is_valid():
+        messages.error(request, "Choose a difficulty rating between 1 and 5.")
+        return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
+
+    with transaction.atomic():
+        TaskDifficultyVote.objects.update_or_create(
+            task=task,
+            voter=request.user,
+            defaults={"rating": form.cleaned_data["rating"]},
+        )
+        task.sync_point_value_with_difficulty()
+
+    if task.affiliation.members.count() > 1:
+        messages.success(request, f"Difficulty vote saved for {task.name}.")
+    else:
+        messages.success(request, f"Difficulty updated for {task.name}.")
+
+    return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
 
 
 @login_required(login_url="QuestLog:login")

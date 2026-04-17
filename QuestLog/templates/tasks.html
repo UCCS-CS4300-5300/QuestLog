@@ -1,13 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Task Pool | Quest Log{% endblock %}
 {% block content %}
-<!-- if no parties selcted yet -->
 {% if not party %}
   <div class="mb-4">
     <h1 class="h3 mb-1">Task Pool</h1>
     <p class="text-muted">Select a party to view its available tasks.</p>
   </div>
-  <!-- show all users parties so they pick which one  -->
+
   {% if parties %}
     <div class="row g-3">
       {% for p in parties %}
@@ -21,7 +20,6 @@
         </div>
       {% endfor %}
     </div>
-    <!-- user doesnt have any arties then mention joining or creating one  -->
   {% else %}
     <div class="card">
       <div class="card-body text-muted">
@@ -30,20 +28,18 @@
       </div>
     </div>
   {% endif %}
-<!-- if party is selcted then show tasks inside it  -->
 {% else %}
   <div class="d-flex align-items-start justify-content-between mb-4">
     <div>
-        <!-- link to party selection screen -->
       <div class="mb-1">
-        <a class="link-secondary text-decoration-none" href="{% url 'QuestLog:tasks' %}">← All parties</a>
+        <a class="link-secondary text-decoration-none" href="{% url 'QuestLog:tasks' %}">&larr; All parties</a>
       </div>
-      <h1 class="h3 mb-1">{{ party.party_name }} — Task Pool</h1>
-      <p class="text-muted mb-0">Complete quests to earn XP for your party.</p>
+      <h1 class="h3 mb-1">{{ party.party_name }} &mdash; Task Pool</h1>
+      <p class="text-muted mb-0">Create tasks for this party and let members rate how difficult they feel each one is.</p>
     </div>
-     <!-- Add Task button placeholder, (intentionally disabled until create_task feature is implemented so we dont get an error) -->
-    <button class="btn btn-primary" disabled title="Coming soon">+ Add Task</button>
+    <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">+ Add Task</a>
   </div>
+
   <h5 class="mb-3">Available Quests</h5>
   <div class="row g-3">
     {% for task in available_tasks %}
@@ -51,16 +47,51 @@
         <div class="card h-100">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
-              <h5 class="card-title mb-0">{{ task.description }}</h5>
-              <span class="badge text-bg-success ms-2">{{ task.point_value }} pts</span>
+              <div>
+                <h5 class="card-title mb-1">{{ task.name }}</h5>
+                <p class="card-text text-muted mb-0">{{ task.description }}</p>
+              </div>
+              <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/5</span>
             </div>
-            <p class="card-text text-muted small mb-0">
+
+            <p class="card-text text-muted small mb-3">
               Posted by {{ task.owner.username }}
-              <!-- show recurring infomration if the task is set to repeat    -->
+              &middot; {{ task.difficulty_vote_count }} vote{{ task.difficulty_vote_count|pluralize }}
               {% if task.recurring %}
                 &middot; Repeats every {{ task.recurring }} day{{ task.recurring|pluralize }}
               {% endif %}
             </p>
+
+            <form method="post" action="{% url 'QuestLog:vote_task_difficulty' task.id %}">
+              {% csrf_token %}
+              <div class="row g-2 align-items-end">
+                <div class="col-sm-5">
+                  <label class="form-label small text-muted mb-1" for="difficulty-{{ task.id }}">
+                    {% if party_member_count > 1 %}
+                      Your difficulty vote
+                    {% else %}
+                      Adjust difficulty
+                    {% endif %}
+                  </label>
+                  <select id="difficulty-{{ task.id }}" name="rating" class="form-select form-select-sm">
+                    {% for rating_value, rating_label in difficulty_rating_choices %}
+                      <option value="{{ rating_value }}" {% if task.current_user_rating == rating_value %}selected{% endif %}>
+                        {{ rating_label }}/5
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-sm-auto">
+                  <button type="submit" class="btn btn-outline-primary btn-sm">
+                    {% if party_member_count > 1 %}
+                      Save vote
+                    {% else %}
+                      Save difficulty
+                    {% endif %}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -68,7 +99,7 @@
       <div class="col-12">
         <div class="card">
           <div class="card-body text-muted">
-            No available tasks at the current moment fellow wanderer. have a drink at the saloon and check back later...
+            No available tasks at the moment. Create one to get the party moving.
           </div>
         </div>
       </div>
