@@ -17,7 +17,7 @@ from django.db import transaction
 from django.views.decorators.http import require_POST
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm, CreatePartyForm, InviteUserForm
-from .models import UserProfile, Party,PartyInvitation, Reward, UserPoints,Task,get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
+from .models import UserProfile, Party,PartyInvitation, Reward, UserPoints, Task, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyTasks, getPartyMembers, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
 
 User = get_user_model()
@@ -104,7 +104,6 @@ def about(request):
     return renderPage(request, "about.html")
 
 
-@login_required(login_url="QuestLog:login")
 def tasks(request):
     # if missing then show the party selection screen
     guid =request.GET.get("guid")
