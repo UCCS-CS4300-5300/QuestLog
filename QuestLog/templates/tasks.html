@@ -2,26 +2,27 @@
 {% block title %}Tasks | Quest Log{% endblock %}
 
 {% block content %}
-        <div class="container">
-        <!--- This should be generated-->
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Clean floor</h5>
-                    <p class="card-text">Clean the floor</p>
-                    <a href="{% url 'QuestLog:complete_task' %}" class="btn btn-primary">Accept</a>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Wash the car</h5>
-                    <p class="card-text">Go out and wash the car</p>
-                    <a href="{% url 'QuestLog:complete_task' %}" class="btn btn-primary">Accept</a>
-                </div>
-            </div>
+    <div class="container">
+        <div class="mb-3">
+            <a href="{% url 'QuestLog:task_history' %}" class="btn btn-outline-secondary">View Completed Tasks</a>
         </div>
-        <br>
-        <div class="container">
-            <a  class="btn btn-primary">Add task</a>
-        </div>
+        {% if tasks %}
+            {% for task in tasks %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ task.title }}</h5>
+                        <p class="card-text">{{ task.description }}</p>
+                        <a href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}" class="btn btn-primary">Accept</a>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No tasks found for your account yet.</p>
+        {% endif %}
+    </div>
+    <br>
+    <div class="container">
+        <a class="btn btn-primary">Add task</a>
+    </div>
 
 {% endblock %}

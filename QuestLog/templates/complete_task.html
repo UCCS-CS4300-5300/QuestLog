@@ -9,11 +9,13 @@
 
     <br>
 
-    <h1>Submit task photo #1</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
+    <h1>Submit proof for "{{ task.title }}"</h1>
+    <form action="{% url 'QuestLog:upload_task_proof' %}" method="post" enctype="multipart/form-data">
+           {% csrf_token %}
+        <input type="hidden" name="task_id" value="{{ task.id }}">
         <div class="mb-3">
             <label for="formFile" class="form-label">Choose a file to upload</label>
-            <input class="form-control" type="file" id="formFile" name="file" accept="image/jpeg,image/png"/>
+            <input class="form-control" type="file" id="formFile" name="proof_file" accept="image/jpeg,image/png"/>
         </div>
         <div class="progress d-none mb-3">
             <div class="progress-bar" role="progressbar" style="width: 0%"></div>

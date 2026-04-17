@@ -153,6 +153,7 @@ class Task(models.Model):
 
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
+    title=  models.CharField(max_length=30)
     description = models.CharField(max_length=200)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,
@@ -165,3 +166,6 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     claimed_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+
+# def getTasks(user):
+#     return .all().order_by("username")

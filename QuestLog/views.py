@@ -5,13 +5,14 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
 
 from .forms import QuestLogAuthenticationForm, QuestLogUserCreationForm
-from .models import UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
+from .models import UserProfile, Task, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyTasks, getPartyMembers
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -94,11 +95,45 @@ def about(request):
 
 
 def tasks(request):
-    return renderPage(request, "tasks.html")
+    data = {}
+    if request.user.is_authenticated:
+        data["tasks"] = (
+            Task.objects.filter(owner=request.user)
+            .exclude(status=Task.Status.COMPLETED)
+            .order_by("status", "-created_at")
+        )
+    else:
+        data["tasks"] = Task.objects.none()
+    return render(request, "tasks.html", data)
+
+
+def task_history(request):
+    data = {}
+    if request.user.is_authenticated:
+        data["tasks"] = (
+            Task.objects.filter(owner=request.user, status=Task.Status.COMPLETED)
+            .order_by("-completed_at", "-created_at")
+        )
+    else:
+        data["tasks"] = Task.objects.none()
+    return render(request, "tasks_history.html", data)
 
 
 def complete_task(request):
-    return renderPage(request, "complete_task.html")
+    if not request.user.is_authenticated:
+        return redirect("QuestLog:login")
+
+    task_id = request.GET.get("task_id")
+    task = (
+        Task.objects.filter(id=task_id, owner=request.user)
+        .exclude(status=Task.Status.COMPLETED)
+        .first()
+    )
+    if task is None:
+        messages.error(request, "Task not found.")
+        return redirect("QuestLog:tasks")
+
+    return render(request, "complete_task.html", {"task": task})
 
 
 def login_view(request):
@@ -147,10 +182,19 @@ def normalize_media_path(path):
 def serve_media(request, path):
     normalized_request_path = normalize_media_path(path)
     path_parts = PurePosixPath(normalized_request_path).parts
-    if len(path_parts) < 2 or path_parts[0] != "profile_pictures":
+    if len(path_parts) < 2:
         raise Http404("Media file not found.")
 
-    if not UserProfile.objects.filter(profile_picture=normalized_request_path).exists():
+    allowed_roots = {"profile_pictures", "proofs"}
+    if path_parts[0] not in allowed_roots:
+        raise Http404("Media file not found.")
+
+    is_known_profile_picture = UserProfile.objects.filter(
+        profile_picture=normalized_request_path
+    ).exists()
+    is_known_task_proof = Task.objects.filter(proofs=normalized_request_path).exists()
+
+    if not (is_known_profile_picture or is_known_task_proof):
         raise Http404("Media file not found.")
 
     media_root = Path(settings.MEDIA_ROOT).resolve()
@@ -190,4 +234,33 @@ def create_party(request):
 
 
 def upload_task_proof(request):
-    return render(request, 'upload_task_proof.html')
+    if request.method == "POST":
+        if not request.user.is_authenticated:
+            return redirect("QuestLog:login")
+
+        file = request.FILES.get("proof_file")
+        task_id = request.POST.get("task_id")
+        task = (
+            Task.objects.filter(id=task_id, owner=request.user)
+            .exclude(status=Task.Status.COMPLETED)
+            .first()
+        )
+
+        if task is None:
+            messages.error(request, "Task not found.")
+            return redirect("QuestLog:tasks")
+
+        if not file:
+            messages.error(request, "No file uploaded.")
+            return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+        task.proofs = file
+        task.status = Task.Status.COMPLETED
+        task.completed_at = timezone.now()
+        task.save(update_fields=["proofs", "status", "completed_at"])
+
+        return redirect("QuestLog:tasks")
+
+
+    return HttpResponse("Only POST allowed")
+   
