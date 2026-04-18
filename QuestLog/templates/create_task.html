@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Create task | Quest Log{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-6">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h1 class="h3 mb-1">Create a task</h1>
+          <div class="text-muted">
+            Add a task to a party and give it an initial difficulty rating from 1 to 5.
+          </div>
+        </div>
+        {% if selected_party %}
+          <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}?guid={{ selected_party.guid }}">Back to tasks</a>
+        {% else %}
+          <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}">Back to tasks</a>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            {% if selected_party %}
+              <input type="hidden" name="guid" value="{{ selected_party.guid }}">
+            {% endif %}
+
+            <div class="mb-3">
+              <label for="{{ form.affiliation.id_for_label }}" class="form-label">Party</label>
+              {{ form.affiliation }}
+              {% if form.affiliation.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.affiliation.errors }}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.name.id_for_label }}" class="form-label">Task name</label>
+              {{ form.name }}
+              {% if form.name.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.name.errors }}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+              {{ form.description }}
+              {% if form.description.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.description.errors }}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.difficulty_rating.id_for_label }}" class="form-label">Difficulty rating</label>
+              {{ form.difficulty_rating }}
+              <div class="form-text">Use 1 for easy tasks and 5 for the toughest quests.</div>
+              {% if form.difficulty_rating.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.difficulty_rating.errors }}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">Create task</button>
+              {% if selected_party %}
+                <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}?guid={{ selected_party.guid }}">Cancel</a>
+              {% else %}
+                <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}">Cancel</a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">How difficulty works</div>
+          <ul class="mb-0">
+            <li>Your starting rating is saved when the task is created.</li>
+            <li>Other party members can submit their own rating from the task pool.</li>
+            <li>The task list shows the weighted difficulty score based on the current votes.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

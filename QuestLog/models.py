@@ -2,8 +2,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
-from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.hashers import make_password, check_password
+from django.db import models
 import uuid
 from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avatars, secure_upload_path_proofs, validate_image_file, validate_upload
 
@@ -101,18 +102,18 @@ def getPartyDetails(user, guid):
         #return error
         return None
 
-#get tasks for a party
 def getPartyTasks(party):
     return (
         Task.objects.filter(affiliation=party)
         .select_related("owner")
+        .prefetch_related("difficulty_votes__voter")
         .order_by("status", "-created_at")
     )
-#get party members
+
 def getPartyMembers(party):
     return party.members.all().order_by("username")
 
-#get pending invitations for a user
+
 def getPendingPartyInvitations(user):
     return (
     PartyInvitation.objects
@@ -142,6 +143,9 @@ class Party(models.Model):
     creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  #Admin
     secret = models.OneToOneField(PartySecret,on_delete=models.PROTECT,null=True,blank=True)
     # task_pool = models.ForeignKey(Task)       #Reverse defined in Task.affiliation
+
+    def __str__(self):
+        return self.party_name
 
 class PartyInvitation(models.Model):
     class Status(models.TextChoices):
@@ -189,10 +193,15 @@ class Task(models.Model):
 
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
-    description = models.CharField(max_length=200)
+    name = models.CharField(max_length=120, default="Untitled Task")
+    description = models.TextField(max_length=500)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,
         default=Status.NOT_STARTED,
+    )
+    difficulty_rating = models.PositiveSmallIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
     )
     point_value = models.PositiveIntegerField(default=0)
     proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) #pictures of completed task
@@ -201,3 +210,67 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     claimed_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def difficulty_vote_count(self):
+        prefetched_votes = self._prefetched_objects_cache.get("difficulty_votes") if hasattr(self, "_prefetched_objects_cache") else None
+        if prefetched_votes is not None:
+            return len(prefetched_votes)
+        return self.difficulty_votes.count()
+
+    @property
+    def weighted_difficulty(self):
+        prefetched_votes = self._prefetched_objects_cache.get("difficulty_votes") if hasattr(self, "_prefetched_objects_cache") else None
+
+        if prefetched_votes is not None:
+            votes = list(prefetched_votes)
+            if votes:
+                return sum(vote.rating for vote in votes) / len(votes)
+            return float(self.difficulty_rating)
+
+        aggregate = self.difficulty_votes.aggregate(avg_rating=models.Avg("rating"))
+        return float(aggregate["avg_rating"] or self.difficulty_rating)
+
+    @property
+    def weighted_difficulty_display(self):
+        return f"{self.weighted_difficulty:.1f}"
+
+    def get_vote_for_user(self, user):
+        if not getattr(user, "is_authenticated", False):
+            return None
+
+        prefetched_votes = self._prefetched_objects_cache.get("difficulty_votes") if hasattr(self, "_prefetched_objects_cache") else None
+        if prefetched_votes is not None:
+            for vote in prefetched_votes:
+                if vote.voter_id == user.id:
+                    return vote
+            return None
+
+        return self.difficulty_votes.filter(voter=user).first()
+
+    def sync_point_value_with_difficulty(self, save=True):
+        self.point_value = round(self.weighted_difficulty)
+        if save:
+            self.save(update_fields=["point_value"])
+        return self.point_value
+
+
+class TaskDifficultyVote(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="difficulty_votes")
+    voter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="task_difficulty_votes")
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["task", "voter"], name="unique_task_difficulty_vote_per_user")
+        ]
+
+    def __str__(self):
+        return f"{self.task.name} - {self.voter.username}: {self.rating}"

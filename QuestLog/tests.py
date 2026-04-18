@@ -13,8 +13,8 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
-from .forms import QuestLogUserCreationForm
-from .models import UserProfile, get_user_profile, profile_picture_upload_to, Party, PartyInvitation, Reward, UserPoints
+from .forms import CreateTaskForm, QuestLogUserCreationForm
+from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
 import json
@@ -23,6 +23,7 @@ EXPECTED_VIEW_GET_STATUSES = {
     "home": 200,
     "about": 200,
     "tasks": 200,
+    "create_task": 302,
     "complete_task": 200,
     "login": 200,
     "logout": 302,
@@ -53,7 +54,7 @@ class ViewReachabilityTests(TestCase):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
         
         # routes with required path parameters are tested separately
-        ignored_names = { "accept_party_invitation", "decline_party_invitation" }
+        ignored_names = { "accept_party_invitation", "decline_party_invitation", "vote_task_difficulty" }
         
         self.assertEqual(discovered_names - ignored_names, set(EXPECTED_VIEW_GET_STATUSES))
 
@@ -995,6 +996,164 @@ class LeaderboardViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("QuestLog:leaderboard"))
+
+
+class TaskWorkflowTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        self.creator = User.objects.create_user(
+            username="taskowner",
+            email="taskowner@example.com",
+            password="test-password",
+        )
+        self.party_member = User.objects.create_user(
+            username="partymember",
+            email="member@example.com",
+            password="test-password",
+        )
+        self.outsider = User.objects.create_user(
+            username="outsider",
+            email="outsider@example.com",
+            password="test-password",
+        )
+
+        get_user_profile(self.creator)
+        get_user_profile(self.party_member)
+        get_user_profile(self.outsider)
+
+        self.party = Party.objects.create(
+            party_name="Quest Makers",
+            creator=self.creator,
+        )
+        self.party.members.add(self.creator, self.party_member)
+
+    def test_create_task_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:create_task"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_authenticated_member_can_view_create_task_page(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:create_task"),
+            {"guid": str(self.party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "create_task.html")
+        self.assertEqual(response.context["selected_party"], self.party)
+
+    def test_create_task_form_uses_party_name_for_affiliation_label(self):
+        form = CreateTaskForm(user=self.creator)
+        affiliation_field = form.fields["affiliation"]
+
+        self.assertEqual(affiliation_field.label_from_instance(self.party), "Quest Makers")
+
+    def test_create_task_post_creates_task_and_initial_vote(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.post(
+            reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "affiliation": self.party.id,
+                "name": "Clean the guild hall",
+                "description": "Sweep the floors and reset the tables after raid night.",
+                "difficulty_rating": 4,
+            },
+        )
+
+        task = Task.objects.get(name="Clean the guild hall")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(task.affiliation, self.party)
+        self.assertEqual(task.owner, self.creator)
+        self.assertEqual(task.difficulty_rating, 4)
+        self.assertTrue(
+            TaskDifficultyVote.objects.filter(
+                task=task,
+                voter=self.creator,
+                rating=4,
+            ).exists()
+        )
+
+    def test_tasks_view_shows_add_task_link_for_selected_party(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:tasks"),
+            {"guid": str(self.party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+        )
+
+    def test_party_member_can_vote_on_task_difficulty(self):
+        task = Task.objects.create(
+            owner=self.creator,
+            affiliation=self.party,
+            name="Restock supplies",
+            description="Refill potions, rope, and torches.",
+            difficulty_rating=2,
+            point_value=2,
+        )
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.creator,
+            rating=2,
+        )
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:vote_task_difficulty", args=[task.id]),
+            {"rating": 4},
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            TaskDifficultyVote.objects.filter(
+                task=task,
+                voter=self.party_member,
+                rating=4,
+            ).exists()
+        )
+        self.assertAlmostEqual(task.weighted_difficulty, 3.0)
+
+    def test_non_member_cannot_vote_on_task_difficulty(self):
+        task = Task.objects.create(
+            owner=self.creator,
+            affiliation=self.party,
+            name="Scout the perimeter",
+            description="Walk the outer wall and mark weak points.",
+            difficulty_rating=3,
+            point_value=3,
+        )
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.creator,
+            rating=3,
+        )
+
+        self.client.force_login(self.outsider)
+        response = self.client.post(
+            reverse("QuestLog:vote_task_difficulty", args=[task.id]),
+            {"rating": 5},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            TaskDifficultyVote.objects.filter(
+                task=task,
+                voter=self.outsider,
+            ).exists()
+        )
 
 class PartyInvitationWorkflowTests(TestCase):
     def setUp(self):
