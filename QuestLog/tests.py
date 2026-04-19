@@ -13,17 +13,19 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
-from .forms import QuestLogUserCreationForm
-from .models import UserProfile, get_user_profile, profile_picture_upload_to
+from .forms import CreateTaskForm, QuestLogUserCreationForm
+from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
+import json
 
-EXPECTED_VIEW_STATUSES = {
+EXPECTED_VIEW_GET_STATUSES = {
     "home": 200,
     "about": 200,
     "tasks": 200,
     "task_history": 200,
     "complete_task": 302,
+    "create_task": 302,
     "login": 200,
     "logout": 302,
     "register": 200,
@@ -35,20 +37,37 @@ EXPECTED_VIEW_STATUSES = {
     'create_party': 302,
 }
 
+EXPECTED_VIEW_POST_STATUSES = {
+    "profile": 302
+}
+
 
 class ViewReachabilityTests(TestCase):
-    def assert_view_status(self, view_name, expected_status=200):
+    def assert_view_get_status(self, view_name, expected_status=200):
         response = self.client.get(reverse(f"QuestLog:{view_name}"))
+        self.assertEqual(response.status_code, expected_status)
+
+    def assert_view_post_status(self, view_name, expected_status=200):
+        response = self.client.post(reverse(f"QuestLog:{view_name}"))
         self.assertEqual(response.status_code, expected_status)
 
     def test_all_named_urls_are_accounted_for(self):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
-        self.assertEqual(discovered_names, set(EXPECTED_VIEW_STATUSES))
+        
+        # routes with required path parameters are tested separately
+        ignored_names = { "accept_party_invitation", "decline_party_invitation", "vote_task_difficulty" }
+        
+        self.assertEqual(discovered_names - ignored_names, set(EXPECTED_VIEW_GET_STATUSES))
 
     def test_all_named_urls_return_expected_status_codes(self):
-        for view_name, expected_status in EXPECTED_VIEW_STATUSES.items():
+        #get statuses when not signed in
+        for view_name, expected_status in EXPECTED_VIEW_GET_STATUSES.items():
             with self.subTest(view_name=view_name):
-                self.assert_view_status(view_name, expected_status)
+                self.assert_view_get_status(view_name, expected_status)
+        #post statuses when not signed in
+        for view_name, expected_status in EXPECTED_VIEW_POST_STATUSES.items():
+            with self.subTest(view_name=view_name):
+                self.assert_view_post_status(view_name, expected_status)
 
     def test_profile_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:profile"))
@@ -213,6 +232,28 @@ class UserProfileTests(TestCase):
 
         self.assertEqual(str(user.profile), "liljitdisplay")
 
+    def test_profile_post_all_entries(self):
+        user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
+        self.client.force_login(user)
+        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname", "email": "test3@example.com", }), content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_user_profile(user).display_name, "testname")
+        user = get_user_model().objects.get(pk=user.pk)
+        self.assertEqual(user.email, "test3@example.com")
+
+    def test_profile_post_partial_entries(self):
+        user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
+        self.client.force_login(user)
+        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname"}), content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_user_profile(user).display_name, "testname")
+
+    def test_profile_post_bad(self):
+        user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
+        self.client.force_login(user)
+        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"ghjghkjghj": "testname"}), content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
 
 class AuthenticationFlowTests(TestCase):
     VALID_PASSWORD = "LilJitsPass67"
@@ -285,9 +326,10 @@ class AuthenticationFlowTests(TestCase):
         username,
         password=VALID_PASSWORD,
         display_name="liljitdisplay",
-        email="",
+        email="user@example.com",
         profile_picture=None,
-    ):
+    ):# params to this function are multiline
+
         user = get_user_model().objects.create_user(
             username=username,
             password=password,
@@ -298,7 +340,7 @@ class AuthenticationFlowTests(TestCase):
         if profile_picture is not None:
             profile.profile_picture = profile_picture
         profile.save()
-        return user
+        return user #returns a instance of djangos built in user model
 
     def test_register_creates_user_profile_and_logs_them_in(self):
         response = self.client.post(
@@ -356,6 +398,18 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertRedirects(response, reverse("QuestLog:home"))
         self.assertEqual(str(self.client.session.get("_auth_user_id")), str(user.pk))
+
+
+    def test_logout_logs_out(self):
+        user = self.create_user("liljit")
+        self.client.force_login(user)
+        resp1 = self.client.get(reverse("QuestLog:profile"))
+        resp2 = self.client.get(reverse("QuestLog:logout"))
+        resp3 = self.client.get(reverse("QuestLog:profile"))
+        self.assertEqual(resp1.status_code, 200)
+        self.assertEqual(resp2.status_code, 302)#logout
+        self.assertEqual(resp3.status_code, 302)
+
 
     def test_login_uses_safe_next_redirect(self):
         user = self.create_user("liljit")
@@ -1024,6 +1078,512 @@ class LeaderboardViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("QuestLog:leaderboard"))
+
+
+class TaskWorkflowTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        self.creator = User.objects.create_user(
+            username="taskowner",
+            email="taskowner@example.com",
+            password="test-password",
+        )
+        self.party_member = User.objects.create_user(
+            username="partymember",
+            email="member@example.com",
+            password="test-password",
+        )
+        self.outsider = User.objects.create_user(
+            username="outsider",
+            email="outsider@example.com",
+            password="test-password",
+        )
+
+        get_user_profile(self.creator)
+        get_user_profile(self.party_member)
+        get_user_profile(self.outsider)
+
+        self.party = Party.objects.create(
+            party_name="Quest Makers",
+            creator=self.creator,
+        )
+        self.party.members.add(self.creator, self.party_member)
+
+    def test_create_task_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:create_task"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_authenticated_member_can_view_create_task_page(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:create_task"),
+            {"guid": str(self.party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "create_task.html")
+        self.assertEqual(response.context["selected_party"], self.party)
+
+    def test_create_task_form_uses_party_name_for_affiliation_label(self):
+        form = CreateTaskForm(user=self.creator)
+        affiliation_field = form.fields["affiliation"]
+
+        self.assertEqual(affiliation_field.label_from_instance(self.party), "Quest Makers")
+
+    def test_create_task_post_creates_task_and_initial_vote(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.post(
+            reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "affiliation": self.party.id,
+                "name": "Clean the guild hall",
+                "description": "Sweep the floors and reset the tables after raid night.",
+                "difficulty_rating": 4,
+            },
+        )
+
+        task = Task.objects.get(name="Clean the guild hall")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(task.affiliation, self.party)
+        self.assertEqual(task.owner, self.creator)
+        self.assertEqual(task.difficulty_rating, 4)
+        self.assertTrue(
+            TaskDifficultyVote.objects.filter(
+                task=task,
+                voter=self.creator,
+                rating=4,
+            ).exists()
+        )
+
+    def test_tasks_view_shows_add_task_link_for_selected_party(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:tasks"),
+            {"guid": str(self.party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+        )
+
+    def test_party_member_can_vote_on_task_difficulty(self):
+        task = Task.objects.create(
+            owner=self.creator,
+            affiliation=self.party,
+            name="Restock supplies",
+            description="Refill potions, rope, and torches.",
+            difficulty_rating=2,
+            point_value=2,
+        )
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.creator,
+            rating=2,
+        )
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:vote_task_difficulty", args=[task.id]),
+            {"rating": 4},
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            TaskDifficultyVote.objects.filter(
+                task=task,
+                voter=self.party_member,
+                rating=4,
+            ).exists()
+        )
+        self.assertAlmostEqual(task.weighted_difficulty, 3.0)
+
+    def test_non_member_cannot_vote_on_task_difficulty(self):
+        task = Task.objects.create(
+            owner=self.creator,
+            affiliation=self.party,
+            name="Scout the perimeter",
+            description="Walk the outer wall and mark weak points.",
+            difficulty_rating=3,
+            point_value=3,
+        )
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.creator,
+            rating=3,
+        )
+
+        self.client.force_login(self.outsider)
+        response = self.client.post(
+            reverse("QuestLog:vote_task_difficulty", args=[task.id]),
+            {"rating": 5},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            TaskDifficultyVote.objects.filter(
+                task=task,
+                voter=self.outsider,
+            ).exists()
+        )
+
+class PartyInvitationWorkflowTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+
+        # create users for party workflow testing
+        self.creator = User.objects.create_user(
+            username="partycreator",
+            email="creator@example.com",
+            password="test-password",
+        )
+        self.invited_user = User.objects.create_user(
+            username="inviteduser",
+            email="invited@example.com",
+            password="test-password",
+        )
+        self.other_user = User.objects.create_user(
+            username="otheruser",
+            email="other@example.com",
+            password="test-password",
+        )
+
+        # create profiles so display-related pages have expected data
+        get_user_profile(self.creator)
+        get_user_profile(self.invited_user)
+        get_user_profile(self.other_user)
+
+        # reward used for userpoints creation
+        self.reward = Reward.objects.create(class_attributes="Default Reward")
+
+    def test_create_party_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:create_party"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_authenticated_user_can_view_create_party_page(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(reverse("QuestLog:create_party"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "create_party.html")
+
+    def test_create_party_post_creates_party_and_adds_creator_as_member(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.post(
+            reverse("QuestLog:create_party"),
+            {
+                "party_name": "A Team",
+                "invited_username": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        party = Party.objects.get(party_name="A Team")
+        self.assertEqual(party.creator, self.creator)
+        self.assertTrue(party.members.filter(pk=self.creator.pk).exists())
+
+    def test_create_party_post_creates_userpoints_for_creator(self):
+        self.client.force_login(self.creator)
+
+        self.client.post(
+            reverse("QuestLog:create_party"),
+            {
+                "party_name": "B Team",
+                "invited_username": "",
+            },
+        )
+
+        party = Party.objects.get(party_name="B Team")
+        self.assertTrue(
+            UserPoints.objects.filter(user=self.creator, party=party).exists()
+        )
+
+    def test_create_party_with_valid_invited_username_creates_pending_invitation(self):
+        self.client.force_login(self.creator)
+
+        self.client.post(
+            reverse("QuestLog:create_party"),
+            {
+                "party_name": "C Team",
+                "invited_username": "inviteduser",
+            },
+        )
+
+        party = Party.objects.get(party_name="C Team")
+        invitation = PartyInvitation.objects.get(
+            party=party,
+            invited_user=self.invited_user,
+        )
+
+        self.assertEqual(invitation.invited_by, self.creator)
+        self.assertEqual(invitation.status, PartyInvitation.Status.PENDING)
+
+    def test_create_party_with_unknown_username_still_creates_party(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.post(
+            reverse("QuestLog:create_party"),
+            {
+                "party_name": "D Team",
+                "invited_username": "notarealuser",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Party.objects.filter(party_name="D Team").exists())
+        self.assertEqual(PartyInvitation.objects.count(), 0)
+
+    def test_party_details_requires_logged_in_member(self):
+        party = Party.objects.create(
+            party_name="Private Party",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:party_details"),
+            {"guid": str(party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_party_details_rejects_non_member(self):
+        party = Party.objects.create(
+            party_name="Members Only",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        self.client.force_login(self.other_user)
+        response = self.client.get(
+            reverse("QuestLog:party_details"),
+            {"guid": str(party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_party_details_allows_member_and_uses_template(self):
+        party = Party.objects.create(
+            party_name="Adventure Party",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        self.client.force_login(self.creator)
+        response = self.client.get(
+            reverse("QuestLog:party_details"),
+            {"guid": str(party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "party_details.html")
+        self.assertEqual(response.context["party"], party)
+
+    def test_party_details_post_invites_valid_user(self):
+        party = Party.objects.create(
+            party_name="Invite Test Party",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        self.client.force_login(self.creator)
+        response = self.client.post(
+            reverse("QuestLog:party_details") + f"?guid={party.guid}",
+            {
+                "username": "inviteduser",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            PartyInvitation.objects.filter(
+                party=party,
+                invited_user=self.invited_user,
+                invited_by=self.creator,
+                status=PartyInvitation.Status.PENDING,
+            ).exists()
+        )
+
+    def test_party_details_post_rejects_inviting_yourself(self):
+        party = Party.objects.create(
+            party_name="Self Invite Test",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        self.client.force_login(self.creator)
+        response = self.client.post(
+            reverse("QuestLog:party_details") + f"?guid={party.guid}",
+            {
+                "username": "partycreator",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            PartyInvitation.objects.filter(
+                party=party,
+                invited_user=self.creator,
+            ).exists()
+        )
+
+    def test_party_details_post_rejects_existing_member(self):
+        party = Party.objects.create(
+            party_name="Existing Member Test",
+            creator=self.creator,
+        )
+        party.members.add(self.creator, self.invited_user)
+
+        self.client.force_login(self.creator)
+        response = self.client.post(
+            reverse("QuestLog:party_details") + f"?guid={party.guid}",
+            {
+                "username": "inviteduser",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            PartyInvitation.objects.filter(
+                party=party,
+                invited_user=self.invited_user,
+            ).exists()
+        )
+
+    def test_accept_party_invitation_adds_user_to_party(self):
+        party = Party.objects.create(
+            party_name="Accept Invite Party",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        invitation = PartyInvitation.objects.create(
+            party=party,
+            invited_user=self.invited_user,
+            invited_by=self.creator,
+            status=PartyInvitation.Status.PENDING,
+        )
+
+        self.client.force_login(self.invited_user)
+        response = self.client.post(
+            reverse("QuestLog:accept_party_invitation", args=[invitation.id])
+        )
+
+        invitation.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(party.members.filter(pk=self.invited_user.pk).exists())
+        self.assertEqual(invitation.status, PartyInvitation.Status.ACCEPTED)
+
+    def test_accept_party_invitation_creates_userpoints_for_invited_user(self):
+        party = Party.objects.create(
+            party_name="Points On Accept",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        invitation = PartyInvitation.objects.create(
+            party=party,
+            invited_user=self.invited_user,
+            invited_by=self.creator,
+            status=PartyInvitation.Status.PENDING,
+        )
+
+        self.client.force_login(self.invited_user)
+        self.client.post(reverse("QuestLog:accept_party_invitation", args=[invitation.id]))
+
+        self.assertTrue(
+            UserPoints.objects.filter(
+                user=self.invited_user,
+                party=party,
+            ).exists()
+        )
+
+    def test_decline_party_invitation_updates_status_and_does_not_add_member(self):
+        party = Party.objects.create(
+            party_name="Decline Invite Party",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        invitation = PartyInvitation.objects.create(
+            party=party,
+            invited_user=self.invited_user,
+            invited_by=self.creator,
+            status=PartyInvitation.Status.PENDING,
+        )
+
+        self.client.force_login(self.invited_user)
+        response = self.client.post(
+            reverse("QuestLog:decline_party_invitation", args=[invitation.id])
+        )
+
+        invitation.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(invitation.status, PartyInvitation.Status.DECLINED)
+        self.assertFalse(party.members.filter(pk=self.invited_user.pk).exists())
+
+    def test_user_cannot_accept_someone_elses_invitation(self):
+        party = Party.objects.create(
+            party_name="Wrong User Test",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        invitation = PartyInvitation.objects.create(
+            party=party,
+            invited_user=self.invited_user,
+            invited_by=self.creator,
+            status=PartyInvitation.Status.PENDING,
+        )
+
+        self.client.force_login(self.other_user)
+        response = self.client.post(
+            reverse("QuestLog:accept_party_invitation", args=[invitation.id])
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(party.members.filter(pk=self.other_user.pk).exists())
+
+    def test_profile_page_shows_pending_party_invitations(self):
+        party = Party.objects.create(
+            party_name="Profile Invite Party",
+            creator=self.creator,
+        )
+        party.members.add(self.creator)
+
+        PartyInvitation.objects.create(
+            party=party,
+            invited_user=self.invited_user,
+            invited_by=self.creator,
+            status=PartyInvitation.Status.PENDING,
+        )
+
+        self.client.force_login(self.invited_user)
+        response = self.client.get(reverse("QuestLog:profile"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Party Invitations")
+        self.assertContains(response, "Profile Invite Party")
+        self.assertContains(response, "Accept")
+        self.assertContains(response, "Decline")
+
+
 
     # def test_parties_view_uses_template_and_lists_parties(self):
     #     self.client.force_login(self.user)

@@ -1,70 +1,61 @@
 {% extends 'base.html' %}
-{% load static %}
+{% block title %}Create party | Quest Log{% endblock %}
 
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}QuestLog{% endblock %}</title>
-  {# Load the tag library #}
-  {% load django_bootstrap5 %}
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-6">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h1 class="h3 mb-1">Create a party</h1>
+          <div class="text-muted">Start a party and optionally invite a user right away.</div>
+        </div>
+        <a class="btn btn-outline-secondary" href="{% url 'QuestLog:parties' %}">Back to parties</a>
+      </div>
 
-  {# Load CSS and JavaScript #}
-  {% bootstrap_css %}
-  {% bootstrap_javascript %}
+      <div class="card">
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
 
-  {# Display django.contrib.messages as Bootstrap alerts #}
-  {% bootstrap_messages %}
-</head>
+            <div class="mb-3">
+              <label for="{{ form.party_name.id_for_label }}" class="form-label">Party name</label>
+              {{ form.party_name }}
+              {% if form.party_name.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.party_name.errors }}
+                </div>
+              {% endif %}
+            </div>
 
-<body>
-  <nav class="navbar navbar-expand-sm bg-body-tertiary">
+            <div class="mb-3">
+              <label for="{{ form.invited_username.id_for_label }}" class="form-label">Invite username</label>
+              {{ form.invited_username }}
+              <div class="form-text">Optional. Enter one existing username to invite now.</div>
+              {% if form.invited_username.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.invited_username.errors }}
+                </div>
+              {% endif %}
+            </div>
 
-  <div class="container-fluid">
-    <!-- Links -->
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link" href="#">
-          <img src="{% static 'images/questlog-logo.png' %}" alt="QuestLog Logo" style="height:40px; vertical-align:middle;">
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:home' %}">Home</a>
-      </li>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">Create party</button>
+              <a class="btn btn-outline-secondary" href="{% url 'QuestLog:parties' %}">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
 
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:login' %}">Login</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:register' %}">Sign Up</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:profile' %}">Profile</a>
-      </li>
-
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:tasks' %}">Tasks</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:about' %}">About</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="{% url 'QuestLog:parties' %}">Parties</a>
-      </li>
-    </ul>
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link" >Settings</a>
-      </li>
-
-    </ul>
+      <div class="card mt-3">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">How this works</div>
+          <ul class="mb-0">
+            <li>You become the creator of the new party.</li>
+            <li>You are automatically added as a member.</li>
+            <li>If you enter a valid username, that user receives a pending invitation.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
   </div>
-
-</nav>
-
-  <div class="container py-4">
-    {% block content %}{% endblock %}
-  </div>
-
-</body>
-</html>
+{% endblock %}

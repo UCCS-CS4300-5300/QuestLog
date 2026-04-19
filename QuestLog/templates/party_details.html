@@ -5,15 +5,38 @@
   <div class="d-flex align-items-start justify-content-between mb-3">
     <div>
       <div class="mb-1">
-        <a class="link-secondary text-decoration-none" href="{% url 'QuestLog:parties' %}">← Back to parties</a>
+        <a class="link-secondary text-decoration-none" href="{% url 'QuestLog:parties' %}">&larr; Back to parties</a>
       </div>
       <h1 class="h3 mb-1">{{ party.party_name }}</h1>
       <div class="text-muted">{{ members|length }} member{{ members|length|pluralize }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}?guid={{ party.guid }}">Open task pool</a>
+      <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">Add task</a>
     </div>
   </div>
 
   <div class="row g-3">
     <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header fw-semibold">Invite a member</div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="{{ invite_form.username.id_for_label }}" class="form-label">Username</label>
+              {{ invite_form.username }}
+              {% if invite_form.username.errors %}
+                <div class="text-danger small mt-1">
+                  {{ invite_form.username.errors }}
+                </div>
+              {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">Send invitation</button>
+          </form>
+        </div>
+      </div>
+
       <div class="card h-100">
         <div class="card-header fw-semibold">Members</div>
         <div class="card-body">
@@ -33,30 +56,59 @@
           {% endif %}
         </div>
       </div>
+
+      <div class="card mt-3">
+        <div class="card-header fw-semibold">Pending invitations</div>
+        <div class="card-body">
+          {% if pending_invites_for_party %}
+            <ul class="list-group list-group-flush">
+              {% for invitation in pending_invites_for_party %}
+                <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-semibold">{{ invitation.invited_user.username }}</div>
+                    <div class="small text-muted">
+                      Invited by {{ invitation.invited_by.username }}
+                    </div>
+                  </div>
+                  <span class="badge text-bg-warning">Pending</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-muted">No pending invitations for this party.</div>
+          {% endif %}
+        </div>
+      </div>
     </div>
 
     <div class="col-lg-8">
       <div class="card h-100">
-        <div class="card-header fw-semibold">Tasks</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">Tasks</span>
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">New task</a>
+        </div>
         <div class="card-body">
           {% if tasks %}
             <div class="table-responsive">
               <table class="table align-middle mb-0">
                 <thead>
                   <tr>
-                    <th>Description</th>
+                    <th>Task</th>
                     <th>Status</th>
                     <th>Owner</th>
-                    <th class="text-end">Points</th>
+                    <th class="text-end">Difficulty</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for task in tasks %}
                     <tr>
-                      <td class="fw-semibold">{{ task.description }}</td>
+                      <td>
+                        <div class="fw-semibold">{{ task.name }}</div>
+                        <div class="small text-muted">{{ task.description }}</div>
+                      </td>
                       <td>{{ task.get_status_display }}</td>
                       <td>{{ task.owner.username }}</td>
-                      <td class="text-end">{{ task.point_value }}</td>
+                      <td class="text-end">{{ task.weighted_difficulty_display }}/5</td>
                     </tr>
                   {% endfor %}
                 </tbody>

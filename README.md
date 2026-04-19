@@ -200,9 +200,11 @@ GitHub Actions runs the following on pushes and pull requests:
 - behave tests
 - coverage report generation
 - `python manage.py check`
+- pylint on Python files changed from `main`, with line-level findings in the workflow output and a saved report artifact
 - AI-assisted pull request review workflow
 
 Workflow files:
 
 - [`.github/workflows/django_ci.yml`](.github/workflows/django_ci.yml)
+- [`.github/workflows/pylint_changed_python.yml`](.github/workflows/pylint_changed_python.yml)
 - [`.github/workflows/ai_reviewer.yml`](.github/workflows/ai_reviewer.yml)

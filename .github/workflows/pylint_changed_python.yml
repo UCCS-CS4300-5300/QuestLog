@@ -1,0 +1,140 @@
+name: Pylint Changed Python Files
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pylint-changed-python:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pylint pylint-django
+
+      - name: Determine changed Python files
+        id: changed-python
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags --prune --depth=1 origin main
+
+          if [[ "$EVENT_NAME" == "push" && "$REF_NAME" == "main" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            base_sha="$BEFORE_SHA"
+          else
+            base_sha="$(git merge-base HEAD origin/main)"
+          fi
+
+          comparison="$base_sha..HEAD"
+          git diff --name-only --diff-filter=ACMR "$base_sha" HEAD -- '*.py' > changed_python_files.txt
+
+          echo "comparison=$comparison" >> "$GITHUB_OUTPUT"
+
+          if [[ -s changed_python_files.txt ]]; then
+            echo "has_files=true" >> "$GITHUB_OUTPUT"
+            echo "Changed Python files compared with $comparison:"
+            cat changed_python_files.txt
+          else
+            echo "has_files=false" >> "$GITHUB_OUTPUT"
+            echo "No changed Python files found for $comparison."
+          fi
+
+      - name: Run pylint on changed Python files
+        id: pylint
+        if: steps.changed-python.outputs.has_files == 'true'
+        run: |
+          set +e
+          mapfile -t files < changed_python_files.txt
+
+          pylint \
+            --output-format=github \
+            --load-plugins=pylint_django \
+            --django-settings-module=config.settings \
+            "${files[@]}"
+
+          annotation_exit_code=$?
+
+          pylint \
+            --output-format=text \
+            --load-plugins=pylint_django \
+            --django-settings-module=config.settings \
+            "${files[@]}" | tee pylint-report.txt
+
+          report_exit_code=${PIPESTATUS[0]}
+          set -e
+
+          exit_code="$report_exit_code"
+          if [[ "$annotation_exit_code" != "0" ]]; then
+            exit_code="$annotation_exit_code"
+          fi
+
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish pylint summary
+        if: steps.changed-python.outputs.has_files == 'true'
+        run: |
+          {
+            echo "## Pylint Report"
+            echo
+            echo "Compared files in \`${{ steps.changed-python.outputs.comparison }}\`."
+            echo
+            echo "### Files Checked"
+            while IFS= read -r file; do
+              echo "- \`$file\`"
+            done < changed_python_files.txt
+            echo
+            echo "### Findings"
+            echo '```text'
+            cat pylint-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish no-files summary
+        if: steps.changed-python.outputs.has_files == 'false'
+        run: |
+          {
+            echo "## Pylint Report"
+            echo
+            echo "No changed Python files were found in \`${{ steps.changed-python.outputs.comparison }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload pylint report artifact
+        if: steps.changed-python.outputs.has_files == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pylint-report-${{ github.run_id }}
+          path: |
+            changed_python_files.txt
+            pylint-report.txt
+          retention-days: 14
+
+      - name: Fail when pylint finds issues
+        if: steps.changed-python.outputs.has_files == 'true' && steps.pylint.outputs.exit_code != '0'
+        run: |
+          echo "Pylint found issues in the changed Python files. Review the annotations, logs, or uploaded report artifact."
+          exit 1
