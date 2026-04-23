@@ -9,7 +9,7 @@
 
     <br>
 
-    <h1>Submit proof for "{{ task.title }}"</h1>
+    <h1>Submit proof for "{{ task.name }}"</h1>
     <form action="{% url 'QuestLog:upload_task_proof' %}" method="post" enctype="multipart/form-data">
            {% csrf_token %}
         <input type="hidden" name="task_id" value="{{ task.id }}">

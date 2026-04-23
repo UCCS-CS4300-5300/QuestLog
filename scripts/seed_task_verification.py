@@ -51,10 +51,10 @@ def run():
         ("Take out trash", "Take out all kitchen trash bags", 8),
     ]
 
-    for title, description, points in tasks_to_seed:
+    for name, description, points in tasks_to_seed:
         Task.objects.get_or_create(
             owner=user,
-            title=title,
+            name=name,
             defaults={
                 "description": description,
                 "point_value": points,
