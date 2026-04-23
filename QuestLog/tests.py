@@ -208,7 +208,7 @@ class UrlConfigurationTests(SimpleTestCase):
 
 class UserProfileTests(TestCase):
     def test_user_model_stays_on_django_auth_user(self):
-        self.assertEqual(get_user_model()._meta.label, "auth.User")
+        self.assertEqual(get_user_model()._meta.label, settings.AUTH_USER_MODEL)
 
     def test_create_user_creates_profile_with_default_display_name(self):
         user = get_user_model().objects.create_user(
