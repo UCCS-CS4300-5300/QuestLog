@@ -166,6 +166,12 @@ def complete_task(request):
         return redirect("QuestLog:login")
 
     task_id = request.GET.get("task_id")
+    try:
+        task_id = int(task_id)
+    except (TypeError, ValueError):
+        messages.error(request, "Task not found.")
+        return redirect("QuestLog:tasks")
+
     task = (
         Task.objects.filter(id=task_id, owner=request.user)
         .exclude(status=Task.Status.COMPLETED)
@@ -231,13 +237,33 @@ def serve_media(request, path):
     if path_parts[0] not in allowed_roots:
         raise Http404("Media file not found.")
 
-    is_known_profile_picture = UserProfile.objects.filter(
-        profile_picture=normalized_request_path
-    ).exists()
-    is_known_task_proof = Task.objects.filter(proofs=normalized_request_path).exists()
+    is_profile_picture_request = path_parts[0] == "profile_pictures"
+    if is_profile_picture_request:
+        is_known_profile_picture = UserProfile.objects.filter(
+            profile_picture=normalized_request_path
+        ).exists()
+        if not is_known_profile_picture:
+            raise Http404("Media file not found.")
+    else:
+        task_with_proof = (
+            Task.objects
+            .select_related("affiliation")
+            .filter(proofs=normalized_request_path)
+            .first()
+        )
+        if task_with_proof is None:
+            raise Http404("Media file not found.")
 
-    if not (is_known_profile_picture or is_known_task_proof):
-        raise Http404("Media file not found.")
+        if not request.user.is_authenticated:
+            raise Http404("Media file not found.")
+
+        can_access_proof = task_with_proof.owner_id == request.user.id
+        if not can_access_proof:
+            can_access_proof = task_with_proof.affiliation.members.filter(
+                pk=request.user.pk
+            ).exists()
+        if not can_access_proof:
+            raise Http404("Media file not found.")
 
     media_root = Path(settings.MEDIA_ROOT).resolve()
 

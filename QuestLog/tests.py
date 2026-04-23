@@ -321,6 +321,13 @@ class AuthenticationFlowTests(TestCase):
             content_type="image/bmp",
         )
 
+    def make_task_proof(self):
+        return SimpleUploadedFile(
+            "proof.gif",
+            self.TEST_IMAGE_BYTES,
+            content_type="image/gif",
+        )
+
     def create_user(
         self,
         username,
@@ -698,6 +705,79 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.reload_urlconf()
+
+    def test_production_media_rejects_task_proof_for_anonymous_users(self):
+        owner = self.create_user("proofowner")
+        party = Party.objects.create(party_name="Proof Party", creator=owner)
+        party.members.add(owner)
+        task = Task.objects.create(
+            owner=owner,
+            name="Secret Proof Task",
+            description="Proof should not be public.",
+            affiliation=party,
+            proofs=self.make_task_proof(),
+            status=Task.Status.COMPLETED,
+        )
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(task.proofs.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
+    def test_production_media_rejects_task_proof_for_non_party_members(self):
+        owner = self.create_user("proofowner")
+        intruder = self.create_user("proofintruder")
+        party = Party.objects.create(party_name="Proof Party", creator=owner)
+        party.members.add(owner)
+        task = Task.objects.create(
+            owner=owner,
+            name="Secret Proof Task",
+            description="Proof should not be public.",
+            affiliation=party,
+            proofs=self.make_task_proof(),
+            status=Task.Status.COMPLETED,
+        )
+        self.client.force_login(intruder)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(task.proofs.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
+    def test_production_media_serves_task_proof_for_party_members(self):
+        owner = self.create_user("proofowner")
+        member = self.create_user("proofmember")
+        party = Party.objects.create(party_name="Proof Party", creator=owner)
+        party.members.add(owner, member)
+        task = Task.objects.create(
+            owner=owner,
+            name="Secret Proof Task",
+            description="Proof should be visible to party members.",
+            affiliation=party,
+            proofs=self.make_task_proof(),
+            status=Task.Status.COMPLETED,
+        )
+        self.client.force_login(member)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(task.proofs.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
+        self.reload_urlconf()
+
+    def test_complete_task_rejects_non_numeric_task_id(self):
+        user = self.create_user("taskviewer")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:complete_task"), {"task_id": "abc"})
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
 
     def test_user_creation_form_save_commit_false_creates_profile_on_save(self):
         form = QuestLogUserCreationForm(
