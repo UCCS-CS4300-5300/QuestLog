@@ -193,7 +193,7 @@ class Task(models.Model):
 
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
-    name=  models.CharField(max_length=30)
+    name=  models.CharField(max_length=30,default="task_name")
     description = models.CharField(max_length=200)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,

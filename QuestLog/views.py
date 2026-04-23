@@ -104,8 +104,15 @@ def about(request):
 
 
 def tasks(request):
-    # if missing then show the party selection screen
-    guid =request.GET.get("guid")
+    # If guid is missing and user has exactly one party, default to it.
+    # This keeps `/tasks/` useful while preserving party selection for multi-party users.
+    guid = request.GET.get("guid")
+    if not guid and request.user.is_authenticated:
+        user_parties = getParties(request.user)
+        if user_parties.count() == 1:
+            guid = str(user_parties.first().guid)
+
+    # if still missing then show the party selection screen
     if not guid:
         return renderPage(request, "tasks.html")
     #if theres a party selected then verify membership and build task pool context
