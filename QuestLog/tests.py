@@ -842,7 +842,7 @@ class TaskPagesTemplateTests(TestCase):
 
         self.active_task = Task.objects.create(
             owner=self.user,
-            title="Open Item",
+            name="Open Item",
             description="This should appear on tasks page only.",
             status=Task.Status.NOT_STARTED,
             point_value=5,
@@ -850,7 +850,7 @@ class TaskPagesTemplateTests(TestCase):
         )
         self.completed_task = Task.objects.create(
             owner=self.user,
-            title="Done Item",
+            name="Done Item",
             description="This should appear on task history only.",
             status=Task.Status.COMPLETED,
             point_value=10,
@@ -863,7 +863,7 @@ class TaskPagesTemplateTests(TestCase):
         )
         self.other_users_completed_task = Task.objects.create(
             owner=self.other_user,
-            title="Other User Done Item",
+            name="Other User Done Item",
             description="Should not appear for logged in user.",
             status=Task.Status.COMPLETED,
             point_value=15,

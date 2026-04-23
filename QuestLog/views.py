@@ -136,6 +136,24 @@ def tasks(request):
     return render(request, "tasks.html",context)
 
 
+def task_history(request):
+    if request.user.is_authenticated:
+        completed_tasks = (
+            Task.objects.filter(owner=request.user, status=Task.Status.COMPLETED)
+            .select_related("owner", "affiliation")
+            .order_by("-completed_at", "-created_at")
+        )
+        context = {
+            "profile": get_user_profile(request.user),
+            "party_leaderboards": genLeaderboard(request.user),
+            "parties": getParties(request.user),
+            "pending_party_invitations": getPendingPartyInvitations(request.user),
+            "tasks": list(completed_tasks),
+        }
+        return render(request, "tasks_history.html", context)
+    return render(request, "tasks_history.html", {"tasks": []})
+
+
 def complete_task(request):
     if not request.user.is_authenticated:
         return redirect("QuestLog:login")

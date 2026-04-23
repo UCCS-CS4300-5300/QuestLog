@@ -5,6 +5,9 @@
   <div class="mb-4">
     <h1 class="h3 mb-1">Task Pool</h1>
     <p class="text-muted">Select a party to view its available tasks.</p>
+    {% if request.user.is_authenticated %}
+      <p class="mb-0"><a class="btn btn-outline-secondary btn-sm" href="{% url 'QuestLog:task_history' %}">Task history</a></p>
+    {% endif %}
   </div>
 
   {% if parties %}
@@ -37,7 +40,10 @@
       <h1 class="h3 mb-1">{{ party.party_name }} &mdash; Task Pool</h1>
       <p class="text-muted mb-0">Create tasks for this party and let members rate how difficult they feel each one is.</p>
     </div>
-    <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">+ Add Task</a>
+    <div class="d-flex flex-wrap gap-2 justify-content-end">
+      <a class="btn btn-outline-secondary" href="{% url 'QuestLog:task_history' %}">Task history</a>
+      <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">+ Add Task</a>
+    </div>
   </div>
 
   <h5 class="mb-3">Available Quests</h5>

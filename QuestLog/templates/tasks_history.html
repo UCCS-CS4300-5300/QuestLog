@@ -11,7 +11,7 @@
             {% for task in tasks %}
                 <div class="card mb-3">
                     <div class="card-body">
-                        <h5 class="card-title">{{ task.title }}</h5>
+                        <h5 class="card-title">{{ task.name }}</h5>
                         <p class="card-text">{{ task.description }}</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
                         {% if task.completed_at %}
@@ -22,7 +22,7 @@
                             <p class="card-text mb-1"><strong>Proof:</strong></p>
                             <img
                                 src="{{ task.proofs.url }}"
-                                alt="Proof for {{ task.title }}"
+                                alt="Proof for {{ task.name }}"
                                 style="width: 240px; height: 180px; object-fit: cover; border-radius: 8px;"
                             />
                         {% else %}
