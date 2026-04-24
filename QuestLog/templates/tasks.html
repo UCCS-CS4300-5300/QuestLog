@@ -50,7 +50,12 @@
   <div class="row g-3">
     {% for task in available_tasks %}
       <div class="col-md-6">
-        <div class="card h-100">
+        <div
+          class="card h-100 task-tile"
+          role="link"
+          tabindex="0"
+          data-task-url="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}"
+        >
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
               <div>
@@ -112,4 +117,33 @@
     {% endfor %}
   </div>
 {% endif %}
+<!-- This is the code that enables linking onclick to /complete_task -->
+<script>
+  (function () {
+    const interactiveSelector = "a, button, input, select, textarea, label, form";
+
+    document.querySelectorAll(".task-tile").forEach((tile) => {
+      const goToTask = () => {
+        const targetUrl = tile.dataset.taskUrl;
+        if (targetUrl) {
+          window.location.href = targetUrl;
+        }
+      };
+
+      tile.addEventListener("click", (event) => {
+        if (event.target.closest(interactiveSelector)) {
+          return;
+        }
+        goToTask();
+      });
+
+      tile.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          goToTask();
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}
