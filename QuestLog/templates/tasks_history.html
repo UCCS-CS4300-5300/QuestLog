@@ -14,6 +14,14 @@
                         <h5 class="card-title">{{ task.name }}</h5>
                         <p class="card-text">{{ task.description }}</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
+                        <p class="card-text mb-1">
+                            <strong>Completed by:</strong>
+                            {% if task.completed_by %}
+                                {{ task.completed_by.username }}
+                            {% else %}
+                                {{ task.owner.username }}
+                            {% endif %}
+                        </p>
                         {% if task.completed_at %}
                             <p class="card-text mb-2"><strong>Completed:</strong> {{ task.completed_at }}</p>
                         {% endif %}
