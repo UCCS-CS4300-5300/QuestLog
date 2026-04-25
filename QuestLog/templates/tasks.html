@@ -41,8 +41,8 @@
       <p class="text-muted mb-0">Create tasks for this party and let members rate how difficult they feel each one is.</p>
     </div>
     <div class="d-flex flex-wrap gap-2 justify-content-end">
-      <a class="btn btn-outline-secondary" href="{% url 'QuestLog:task_history' %}">Task history</a>
       <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">+ Add Task</a>
+      <a class="btn btn-info" href="{% url 'QuestLog:task_history' %}">Task history</a>
     </div>
   </div>
 
@@ -52,9 +52,7 @@
       <div class="col-md-6">
         <div
           class="card h-100 task-tile"
-          role="link"
           tabindex="0"
-          data-task-url="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}"
         >
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
@@ -63,6 +61,7 @@
                 <p class="card-text text-muted mb-0">{{ task.description }}</p>
               </div>
               <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/5</span>
+              <a class="btn btn-primary" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">Start Task</a>
             </div>
 
             <p class="card-text text-muted small mb-3">
