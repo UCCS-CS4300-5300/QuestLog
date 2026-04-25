@@ -12,7 +12,7 @@
                 <div class="card mb-3">
                     <div class="card-body">
                         <h5 class="card-title">{{ task.name }}</h5>
-                        <p class="card-text">{{ task.description }}</p>
+                        <p class="card-text">{{ task.description|striptags }}</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
                         <p class="card-text mb-1">
                             <strong>Completed by:</strong>

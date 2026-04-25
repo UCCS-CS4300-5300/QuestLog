@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +18,8 @@ from django.views.decorators.http import require_POST
 from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, TaskDifficultyVoteForm
 from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
+
+from PIL import Image
 
 User = get_user_model()
 
@@ -237,8 +239,12 @@ def serve_media(request, path):
     if path_parts[0] not in allowed_roots:
         raise Http404("Media file not found.")
 
+    if not request.user.is_authenticated:
+        raise Http404("Media file not found.")
+
     is_profile_picture_request = path_parts[0] == "profile_pictures"
     if is_profile_picture_request:
+
         is_known_profile_picture = UserProfile.objects.filter(
             profile_picture=normalized_request_path
         ).exists()
@@ -252,9 +258,6 @@ def serve_media(request, path):
             .first()
         )
         if task_with_proof is None:
-            raise Http404("Media file not found.")
-
-        if not request.user.is_authenticated:
             raise Http404("Media file not found.")
 
         can_access_proof = task_with_proof.owner_id == request.user.id
@@ -592,6 +595,8 @@ def decline_party_invitation(request, invitation_id):
     messages.info(request, f"You declined the invitation to {invitation.party.party_name}.")
     return redirect("QuestLog:profile")
 
+MAX_FILE_SIZE = 5*1024*1024
+IMAGE_TYPES = Image.registered_extensions()
 
 def upload_task_proof(request):
     if request.method == "POST":
@@ -614,6 +619,16 @@ def upload_task_proof(request):
             messages.error(request, "No file uploaded.")
             return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
 
+        #is image file type
+        if not (file["name"] and (file["name"].split('.', 1)[-1] in IMAGE_TYPES)):
+            messages.error(request, "Unsupported format")
+            return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+        #greater than X
+        if file.size > MAX_FILE_SIZE:
+            messages.error(request, "Image to large")
+            return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
         task.proofs = file
         task.status = Task.Status.COMPLETED
         task.completed_at = timezone.now()
@@ -622,5 +637,5 @@ def upload_task_proof(request):
         return redirect("QuestLog:tasks")
 
 
-    return HttpResponse("Only POST allowed")
+    return Response("Only POST allowed", status=405)
    

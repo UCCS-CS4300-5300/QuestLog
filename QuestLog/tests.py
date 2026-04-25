@@ -33,12 +33,13 @@ EXPECTED_VIEW_GET_STATUSES = {
     'parties': 302,
     'party_details': 302,
     'leaderboard': 302,
-    'upload_task_proof': 200,
+    'upload_task_proof': 405,
     'create_party': 302,
 }
 
 EXPECTED_VIEW_POST_STATUSES = {
-    "profile": 302
+    "profile": 302,
+    'upload_task_proof': 302,
 }
 
 
@@ -610,18 +611,6 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
-
-    def test_production_media_serves_profile_picture_for_anonymous_users(self):
-        user = self.create_user("liljit", profile_picture=self.make_profile_picture())
-        profile = get_user_profile(user)
-
-        with self.settings(DEBUG=False):
-            self.reload_urlconf()
-            response = self.client.get(profile.profile_picture.url)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
-        self.reload_urlconf()
 
     def test_production_media_serves_profile_picture_for_authenticated_user(self):
         user = self.create_user("liljit", profile_picture=self.make_profile_picture())
