@@ -250,6 +250,9 @@ class TaskCompletionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["proofs"].required = True
+        self.fields["proofs"].error_messages["required"] = (
+            "Upload evidence before completing this quest."
+        )
 
     def clean_proofs(self):
         proof = self.cleaned_data.get("proofs")
