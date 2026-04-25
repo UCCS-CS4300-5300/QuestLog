@@ -598,45 +598,42 @@ def decline_party_invitation(request, invitation_id):
 MAX_FILE_SIZE = 5*1024*1024
 IMAGE_TYPES = ["image/avif", "image/gif", "image/bmp", "image/jpeg", "image/png", "image/webp"]
 
+@require_POST
 def upload_task_proof(request):
-    if request.method == "POST":
-        if not request.user.is_authenticated:
-            return redirect("QuestLog:login")
+    if not request.user.is_authenticated:
+        return redirect("QuestLog:login")
 
-        file1 = request.FILES.get("proof_file")
-        task_id = request.POST.get("task_id")
-        task = (
-            Task.objects.filter(id=task_id, owner=request.user)
-            .exclude(status=Task.Status.COMPLETED)
-            .first()
-        )
+    file1 = request.FILES.get("proof_file")
+    task_id = request.POST.get("task_id")
+    task = (
+        Task.objects.filter(id=task_id, owner=request.user)
+        .exclude(status=Task.Status.COMPLETED)
+        .first()
+    )
 
-        if task is None:
-            messages.error(request, "Task not found.")
-            return redirect("QuestLog:tasks")
-
-        if not file1:
-            messages.error(request, "No file uploaded.")
-            return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
-
-        #is image file type
-        content_type = file1.content_type
-        if not (content_type in IMAGE_TYPES):
-            messages.error(request, "Unsupported format")
-            return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
-
-        #greater than X
-        if file1.size > MAX_FILE_SIZE:
-            messages.error(request, "Image to large")
-            return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
-
-        task.proofs = file1
-        task.status = Task.Status.COMPLETED
-        task.completed_at = timezone.now()
-        task.save(update_fields=["proofs", "status", "completed_at"])
-
+    if task is None:
+        messages.error(request, "Task not found.")
         return redirect("QuestLog:tasks")
 
+    if not file1:
+        messages.error(request, "No file uploaded.")
+        return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
 
-    return Response("Only POST allowed", status=405)
+    #is image file type
+    content_type = file1.content_type
+    if not (content_type in IMAGE_TYPES):
+        messages.error(request, "Unsupported format")
+        return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+    #greater than X
+    if file1.size > MAX_FILE_SIZE:
+        messages.error(request, "Image to large")
+        return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+    task.proofs = file1
+    task.status = Task.Status.COMPLETED
+    task.completed_at = timezone.now()
+    task.save(update_fields=["proofs", "status", "completed_at"])
+
+    return redirect("QuestLog:tasks")
    
