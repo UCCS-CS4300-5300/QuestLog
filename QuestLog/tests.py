@@ -12,6 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 from .forms import CreateTaskForm, QuestLogUserCreationForm
 from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
@@ -1046,6 +1047,17 @@ class TaskWorkflowTests(TestCase):
             content_type="image/png",
         )
 
+    def make_task_proof_with_metadata(self, filename="proof-with-metadata.png"):
+        metadata = PngInfo()
+        metadata.add_text("note", "Finished with curl practice after chores.")
+        buffer = BytesIO()
+        Image.new("RGB", (1, 1), color="green").save(buffer, format="PNG", pnginfo=metadata)
+        return SimpleUploadedFile(
+            filename,
+            buffer.getvalue(),
+            content_type="image/png",
+        )
+
     def create_task(self, **overrides):
         defaults = {
             "owner": self.creator,
@@ -1221,6 +1233,21 @@ class TaskWorkflowTests(TestCase):
         self.assertEqual(user_points.points, 4)
         self.assertEqual(user_points.rewards.name, "Quest Completion Reward")
         self.assertEqual(user_points.rewards.party, self.party)
+
+    def test_valid_image_proof_with_text_metadata_is_allowed(self):
+        task = self.create_task(name="Upload metadata proof")
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:complete_task_detail", args=[task.id]),
+            {"proofs": self.make_task_proof_with_metadata()},
+        )
+
+        task.refresh_from_db()
+
+        self.assertRedirects(response, reverse("QuestLog:leaderboard"))
+        self.assertEqual(task.status, Task.Status.COMPLETED)
+        self.assertTrue(task.proofs.name.startswith("proofs/"))
 
     def test_completed_task_cannot_award_points_twice(self):
         task = self.create_task(name="Reset the common room", point_value=5)

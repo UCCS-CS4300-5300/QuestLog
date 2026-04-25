@@ -28,7 +28,21 @@ def secure_upload_path_proofs(instance, filename):
     new_filename = f"{uuid.uuid4().hex}{ext}"
     return os.path.join("proofs", new_filename)
 
+def is_valid_image(file):
+    try:
+        file.seek(0)
+        img = Image.open(file)
+        img.verify()
+        return True
+    except Exception:
+        return False
+    finally:
+        file.seek(0)
+
 def scan_for_malicious_code(file):
+    if is_valid_image(file):
+        return
+
     dangerous_patterns = [
         '<script>', '</script>', '<iframe>', '<img src=x onerror=',
         '<object>', 'javascript:', '<svg onload=', '<embed>', '<body onload=',
@@ -56,10 +70,6 @@ ALLOWED_MIME_TYPES = [
 
 
 def validate_image_file(file):
-    try:
-        img = Image.open(file)
-        img.verify()  # raises exception if file is not a valid image
-    except Exception:
+    if not is_valid_image(file):
         raise ValidationError("Invalid image file")
-    file.seek(0)
     
