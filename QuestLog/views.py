@@ -1,24 +1,54 @@
+"""View functions for QuestLog pages and workflows."""
+# pylint: disable=missing-function-docstring,invalid-name
+
+import json
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
-import json
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
-from django.db import transaction
-from django.db.models import Q
-from django.views.decorators.http import require_POST
 
-from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, RewardForm, TaskCompletionForm, TaskDifficultyVoteForm
-from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile, get_default_reward, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
+from .forms import (
+    CreatePartyForm,
+    CreateTaskForm,
+    InviteUserForm,
+    QuestLogAuthenticationForm,
+    QuestLogUserCreationForm,
+    RewardForm,
+    TaskCompletionForm,
+    TaskDifficultyVoteForm,
+)
+from .models import (
+    Party,
+    PartyInvitation,
+    Reward,
+    RewardPurchase,
+    Task,
+    TaskDifficultyVote,
+    UserPoints,
+    UserProfile,
+    genLeaderboard,
+    get_default_reward,
+    get_user_display_name,
+    get_user_profile,
+    getParties,
+    getPartyDetails,
+    getPartyMembers,
+    getPartyTasks,
+    getPendingPartyInvitations,
+)
 from .serializers import updateUser, updateProfile
 
 User = get_user_model()
@@ -138,14 +168,14 @@ def get_safe_redirect(request):
 
 #render a template page
 def renderPage(request, page):
-    if(request.user.is_authenticated):
+    if request.user.is_authenticated:
         data = { #initial data
             "profile": get_user_profile(request.user),
             "party_leaderboards": genLeaderboard(request.user),
             "parties": getParties(request.user),
             "pending_party_invitations": getPendingPartyInvitations(request.user),
         }
-        guid = request.GET.get("guid") or request.GET.get("party") #check to see if there is a party specified
+        guid = request.GET.get("guid") or request.GET.get("party")
         if guid:
             data["party"] = getPartyDetails(request.user, guid)
             if data["party"] is not None:
@@ -153,10 +183,10 @@ def renderPage(request, page):
                 data["tasks"] = getPartyTasks(data["party"])
 
         return render(request, page, data)
-    else:
 
-        return render(request, page)
-    
+    return render(request, page)
+
+
 def home(request):
     return renderPage(request, "home.html")
 
@@ -167,11 +197,11 @@ def about(request):
 
 def tasks(request):
     # if missing then show the party selection screen
-    guid =request.GET.get("guid")
+    guid = request.GET.get("guid")
     if not guid:
         return renderPage(request, "tasks.html")
     #if theres a party selected then verify membership and build task pool context
-    party =getPartyDetails(request.user, guid)
+    party = getPartyDetails(request.user, guid)
     if party is None:
         messages.error(request, "Party not found or perhaps you do not have access to it")
         return redirect("QuestLog:tasks")
@@ -185,17 +215,17 @@ def tasks(request):
         current_vote = task.get_vote_for_user(request.user)
         task.current_user_rating = current_vote.rating if current_vote else task.difficulty_rating
 
-    context={
-        "profile": get_user_profile(request.user) ,
+    context = {
+        "profile": get_user_profile(request.user),
         "party_leaderboards": genLeaderboard(request.user),
-        "parties": getParties(request.user) ,
+        "parties": getParties(request.user),
         "pending_party_invitations": getPendingPartyInvitations(request.user),
         "party": party,
         "available_tasks": available_tasks,
         "difficulty_rating_choices": TaskDifficultyVoteForm.RATING_CHOICES,
         "party_member_count": party_member_count,
     }
-    return render(request, "tasks.html",context)
+    return render(request, "tasks.html", context)
 
 
 def complete_task(request):
@@ -256,7 +286,10 @@ def complete_task_detail(request, task_id):
                 )
 
                 if locked_task.status == Task.Status.COMPLETED:
-                    messages.warning(request, f"{locked_task.name} has already been completed.")
+                    messages.warning(
+                        request,
+                        f"{locked_task.name} has already been completed.",
+                    )
                     return redirect(redirect_to_tasks)
 
                 proof = form.cleaned_data["proofs"]
@@ -313,7 +346,10 @@ def login_view(request):
 
     if request.method == "POST" and form.is_valid():
         login(request, form.get_user())
-        messages.success(request, f"Welcome back, {get_user_display_name(form.get_user())}.")
+        messages.success(
+            request,
+            f"Welcome back, {get_user_display_name(form.get_user())}.",
+        )
         return redirect(redirect_to)
 
     return render(request, "login.html", {"form": form, "next": redirect_to})
@@ -357,7 +393,9 @@ def serve_media(request, path):
     is_allowed_media = False
 
     if media_type == "profile_pictures":
-        is_allowed_media = UserProfile.objects.filter(profile_picture=normalized_request_path).exists()
+        is_allowed_media = UserProfile.objects.filter(
+            profile_picture=normalized_request_path
+        ).exists()
     elif media_type == "proofs" and request.user.is_authenticated:
         is_allowed_media = Task.objects.filter(
             proofs=normalized_request_path,
@@ -396,18 +434,24 @@ def profile(request):
 
         #flag is true if json parsed correctly and there are no unauthorized keys
         if flag and set(data).issubset(allowed_keys):
-            #deserialize (user and userprofile need two seperate serializers since they are seperate models)
-            userPro = UserProfile.objects.get(user=request.user)
-            userProfileSerializer = updateProfile(userPro, data=data, partial=True)
-            userSerializer = updateUser(request.user, data=data, partial=True)
-            if userProfileSerializer.is_valid() and userSerializer.is_valid():
+            # Deserialize the auth user and profile as separate models.
+            user_profile = UserProfile.objects.get(user=request.user)
+            profile_serializer = updateProfile(user_profile, data=data, partial=True)
+            user_serializer = updateUser(request.user, data=data, partial=True)
+            if profile_serializer.is_valid() and user_serializer.is_valid():
                 with transaction.atomic():
-                    userProfileSerializer.save()
-                    userSerializer.save()
+                    profile_serializer.save()
+                    user_serializer.save()
 
-                resp = Response(userProfileSerializer.data | userSerializer.data, status=200)
+                resp = Response(
+                    profile_serializer.data | user_serializer.data,
+                    status=200,
+                )
             else:
-                resp = Response(userProfileSerializer.errors | userSerializer.errors, status=400)
+                resp = Response(
+                    profile_serializer.errors | user_serializer.errors,
+                    status=400,
+                )
         else:
             resp = Response("Bad json or unknown keys", status=400)
 
@@ -417,8 +461,7 @@ def profile(request):
         resp.renderer_context = {'request': request}
 
         return resp
-    else:
-        return renderPage(request, "profile.html")
+    return renderPage(request, "profile.html")
 
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
@@ -518,7 +561,10 @@ def purchase_reward(request, reward_id):
         user_points = get_or_create_user_points(request.user, party, for_update=True)
 
         if user_points.available_points < reward.point_cost:
-            messages.error(request, f"You need {reward.point_cost} points to redeem {reward.label}.")
+            messages.error(
+                request,
+                f"You need {reward.point_cost} points to redeem {reward.label}.",
+            )
             return redirect(redirect_to_rewards)
 
         user_points.spent_points += reward.point_cost
@@ -644,18 +690,30 @@ def party_details(request):
                 )
 
                 if created:
-                    messages.success(request, f"{invited_user.username} has been invited to {party.party_name}.")
+                    messages.success(
+                        request,
+                        f"{invited_user.username} has been invited to {party.party_name}.",
+                    )
                 else:
                     if invitation.status == PartyInvitation.Status.PENDING:
-                        messages.warning(request, f"{invited_user.username} already has a pending invitation.")
+                        messages.warning(
+                            request,
+                            f"{invited_user.username} already has a pending invitation.",
+                        )
                     elif invitation.status == PartyInvitation.Status.ACCEPTED:
-                        messages.warning(request, f"{invited_user.username} is already in this party.")
+                        messages.warning(
+                            request,
+                            f"{invited_user.username} is already in this party.",
+                        )
                     else:
                         invitation.status = PartyInvitation.Status.PENDING
                         invitation.invited_by = request.user
                         invitation.responded_at = None
                         invitation.save(update_fields=["status", "invited_by", "responded_at"])
-                        messages.success(request, f"A new invitation was sent to {invited_user.username}.")
+                        messages.success(
+                            request,
+                            f"A new invitation was sent to {invited_user.username}.",
+                        )
 
                 return redirect(f"{reverse('QuestLog:party_details')}?guid={party.guid}")
 
@@ -715,7 +773,10 @@ def create_party(request):
                     invited_user = None
 
                 if invited_user is None:
-                    messages.warning(request, "Party created, but the invited username was not found.")
+                    messages.warning(
+                        request,
+                        "Party created, but the invited username was not found.",
+                    )
                 elif invited_user.pk == request.user.pk:
                     messages.warning(request, "Party created. You cannot invite yourself.")
                 elif party.members.filter(pk=invited_user.pk).exists():

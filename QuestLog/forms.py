@@ -1,3 +1,6 @@
+"""Forms used by QuestLog views."""
+# pylint: disable=missing-class-docstring,missing-function-docstring,too-many-ancestors
+
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -28,7 +31,10 @@ def get_allowed_profile_picture_formats():
         DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS,
     )
     try:
-        normalized_formats = {str(image_format).upper() for image_format in configured_formats}
+        normalized_formats = {
+            str(image_format).upper()
+            for image_format in configured_formats
+        }
     except TypeError:
         return DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS
 
@@ -135,15 +141,15 @@ class InviteUserForm(forms.Form):
 
         try:
             invited_user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            raise forms.ValidationError("No user with that username exists.")
+        except User.DoesNotExist as exc:
+            raise forms.ValidationError("No user with that username exists.") from exc
 
         if self.party and self.party.members.filter(pk=invited_user.pk).exists():
             raise forms.ValidationError("That user is already a member of this party.")
 
         if self.invited_by and invited_user.pk == self.invited_by.pk:
             raise forms.ValidationError("You cannot invite yourself.")
-        #Store the user object for use in the view after form validation
+        # Store the user object for use in the view after form validation.
         self.invited_user = invited_user
 
         return invited_user

@@ -1,6 +1,18 @@
+"""Admin registrations for QuestLog models."""
+# pylint: disable=missing-class-docstring
+
 from django.contrib import admin
 
-from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile
+from .models import (
+    Party,
+    PartyInvitation,
+    Reward,
+    RewardPurchase,
+    Task,
+    TaskDifficultyVote,
+    UserPoints,
+    UserProfile,
+)
 
 
 @admin.register(UserProfile)
@@ -17,14 +29,29 @@ class PartyAdmin(admin.ModelAdmin):
 
 @admin.register(PartyInvitation)
 class PartyInvitationAdmin(admin.ModelAdmin):
-    list_display = ("party", "invited_user", "invited_by", "status", "created_at", "responded_at")
+    list_display = (
+        "party",
+        "invited_user",
+        "invited_by",
+        "status",
+        "created_at",
+        "responded_at",
+    )
     list_filter = ("status",)
     search_fields = ("party__party_name", "invited_user__username", "invited_by__username")
 
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ("name", "affiliation", "owner", "completed_by", "difficulty_rating", "point_value", "status")
+    list_display = (
+        "name",
+        "affiliation",
+        "owner",
+        "completed_by",
+        "difficulty_rating",
+        "point_value",
+        "status",
+    )
     list_filter = ("status", "affiliation")
     search_fields = ("name", "description", "owner__username", "affiliation__party_name")
 

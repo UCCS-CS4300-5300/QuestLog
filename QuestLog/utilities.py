@@ -1,75 +1,87 @@
+"""Upload validation and storage helpers."""
 
 import os
 import uuid
+
 from PIL import Image
 from django.core.exceptions import ValidationError
-MEDIA_TYPES=['proofs','avatars']
+
+MEDIA_TYPES = ["proofs", "avatars"]
+
 
 def validate_upload(file):
+    """Validate uploaded file extension and size."""
     max_size = 2 * 1024 * 1024  # 2 MB
-    allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+    allowed_extensions = [".jpg", ".jpeg", ".png", ".gif"]
 
     ext = os.path.splitext(file.name)[1].lower()
     if ext not in allowed_extensions:
-        raise ValidationError(f'Unsupported file extension {ext}. Allowed: {allowed_extensions}')
+        raise ValidationError(
+            f"Unsupported file extension {ext}. Allowed: {allowed_extensions}"
+        )
 
     if file.size > max_size:
-        raise ValidationError(f'File too large. Max size: {max_size / (1024*1024)} MB')
- 
+        raise ValidationError(f"File too large. Max size: {max_size / (1024 * 1024)} MB")
 
-def secure_upload_path_avatars(instance, filename):
+
+def secure_upload_path_avatars(_instance, filename):
+    """Return a randomized upload path for avatar files."""
     ext = os.path.splitext(filename)[1].lower()
     new_filename = f"{uuid.uuid4().hex}{ext}"
     return os.path.join("avatars", new_filename)
-    
 
-def secure_upload_path_proofs(instance, filename):
+
+def secure_upload_path_proofs(_instance, filename):
+    """Return a randomized upload path for proof files."""
     ext = os.path.splitext(filename)[1].lower()
     new_filename = f"{uuid.uuid4().hex}{ext}"
     return os.path.join("proofs", new_filename)
 
+
 def is_valid_image(file):
+    """Return whether the uploaded file is a valid image."""
     try:
         file.seek(0)
         img = Image.open(file)
         img.verify()
         return True
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         return False
     finally:
         file.seek(0)
 
+
 def scan_for_malicious_code(file):
+    """Reject text-like uploads containing dangerous snippets."""
     if is_valid_image(file):
         return
 
     dangerous_patterns = [
-        '<script>', '</script>', '<iframe>', '<img src=x onerror=',
-        '<object>', 'javascript:', '<svg onload=', '<embed>', '<body onload=',
-        '<?php', '<%', '%>', '<asp:', 'eval(', 'exec(', 'system(', 'os.system',
-        'subprocess.Popen', 'subprocess.call', '../', '/etc/passwd', 'C:\\Windows\\System32',
-        'require(', 'include(', 'import os', 'open(', 'SELECT ', 'DROP TABLE', '--',
-        '&&', '$(', 'curl', 'wget', 'nc ', 'pickle.load(', 'yaml.load(',
-        'chmod 777', 'base64_decode(', 'str_rot13('
+        "<script>", "</script>", "<iframe>", "<img src=x onerror=",
+        "<object>", "javascript:", "<svg onload=", "<embed>", "<body onload=",
+        "<?php", "<%", "%>", "<asp:", "eval(", "exec(", "system(", "os.system",
+        "subprocess.Popen", "subprocess.call", "../", "/etc/passwd",
+        "C:\\Windows\\System32", "require(", "include(", "import os", "open(",
+        "SELECT ", "DROP TABLE", "--", "&&", "$(", "curl", "wget", "nc ",
+        "pickle.load(", "yaml.load(", "chmod 777", "base64_decode(",
+        "str_rot13("
     ]
-    content = file.read().decode(errors='ignore').lower()
+    content = file.read().decode(errors="ignore").lower()
     for pattern in dangerous_patterns:
         if pattern.lower() in content:
             raise ValidationError("Malicious content detected")
     file.seek(0)  # reset file pointer after reading
 
 
-
 # Allowed MIME types
 ALLOWED_MIME_TYPES = [
-    'image/jpeg',
-    'image/png',
-    'image/gif'
+    "image/jpeg",
+    "image/png",
+    "image/gif",
 ]
 
 
-
 def validate_image_file(file):
+    """Validate that an uploaded file can be parsed as an image."""
     if not is_valid_image(file):
         raise ValidationError("Invalid image file")
-    

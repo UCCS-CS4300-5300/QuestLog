@@ -1,4 +1,5 @@
-# Generated manually for the task completion and rewards flow.
+"""Task completion and rewards schema changes."""
+# pylint: disable=invalid-name,missing-class-docstring
 
 import django.db.models.deletion
 from django.conf import settings
