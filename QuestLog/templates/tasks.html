@@ -51,7 +51,10 @@
                 <h5 class="card-title mb-1">{{ task.name }}</h5>
                 <p class="card-text text-muted mb-0">{{ task.description }}</p>
               </div>
-              <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/5</span>
+              <div class="text-end ms-2">
+                <span class="badge text-bg-success d-block mb-1">Difficulty {{ task.weighted_difficulty_display }}/5</span>
+                <span class="badge text-bg-primary d-block">{{ task.point_value }} point{{ task.point_value|pluralize }}</span>
+              </div>
             </div>
 
             <p class="card-text text-muted small mb-3">
@@ -92,6 +95,10 @@
                 </div>
               </div>
             </form>
+
+            <div class="border-top mt-3 pt-3">
+              <a class="btn btn-primary btn-sm" href="{% url 'QuestLog:complete_task_detail' task.id %}">Submit proof &amp; complete</a>
+            </div>
           </div>
         </div>
       </div>

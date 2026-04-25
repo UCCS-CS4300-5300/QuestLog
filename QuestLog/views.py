@@ -14,13 +14,74 @@ from django.utils.http import escape_leading_slashes, url_has_allowed_host_and_s
 from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.db import transaction
+from django.db.models import Q
 from django.views.decorators.http import require_POST
 
-from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, TaskDifficultyVoteForm
-from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
+from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, RewardForm, TaskCompletionForm, TaskDifficultyVoteForm
+from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile, get_default_reward, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
 
 User = get_user_model()
+
+
+def get_or_create_user_points(user, party, for_update=False):
+    default_reward = get_default_reward()
+    queryset = UserPoints.objects
+    if for_update:
+        queryset = queryset.select_for_update()
+
+    user_points, _ = queryset.get_or_create(
+        user=user,
+        party=party,
+        defaults={
+            "points": 0,
+            "rewards": default_reward,
+        },
+    )
+    return user_points
+
+
+def ensure_party_reward_catalog(party, created_by=None):
+    starter_rewards = [
+        {
+            "name": "Pick the next group activity",
+            "description": "Choose the next movie, game, or shared activity for the party.",
+            "point_cost": 5,
+        },
+        {
+            "name": "Small treat fund",
+            "description": "Redeem points toward a low-cost treat agreed on by the party.",
+            "point_cost": 10,
+        },
+    ]
+
+    for reward_data in starter_rewards:
+        Reward.objects.get_or_create(
+            party=party,
+            name=reward_data["name"],
+            defaults={
+                "class_attributes": reward_data["name"],
+                "description": reward_data["description"],
+                "point_cost": reward_data["point_cost"],
+                "created_by": created_by,
+            },
+        )
+
+
+def get_completion_reward(party):
+    reward, _ = Reward.objects.get_or_create(
+        party=party,
+        class_attributes="Quest Completion Reward",
+        defaults={
+            "name": "Quest Completion Reward",
+            "description": "Awarded when a party member completes a quest with proof.",
+            "point_cost": 0,
+            "is_active": False,
+            "created_by": party.creator,
+        },
+    )
+    return reward
+
 
 def get_request_hosts(request):
     request_host = request.get_host()
@@ -138,7 +199,109 @@ def tasks(request):
 
 
 def complete_task(request):
-    return renderPage(request, "complete_task.html")
+    if not request.user.is_authenticated:
+        return renderPage(request, "complete_task.html")
+
+    selected_guid = request.GET.get("guid")
+    selected_party = getPartyDetails(request.user, selected_guid) if selected_guid else None
+    task_queryset = (
+        Task.objects
+        .filter(affiliation__members=request.user, status=Task.Status.NOT_STARTED)
+        .select_related("affiliation", "owner")
+        .order_by("affiliation__party_name", "-created_at")
+    )
+
+    if selected_guid and selected_party is None:
+        messages.error(request, "Party not found or you do not have access to it.")
+        return redirect("QuestLog:tasks")
+
+    if selected_party is not None:
+        task_queryset = task_queryset.filter(affiliation=selected_party)
+
+    context = {
+        "profile": get_user_profile(request.user),
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user),
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "party": selected_party,
+        "available_tasks": task_queryset,
+    }
+    return render(request, "complete_task.html", context)
+
+
+@login_required(login_url="QuestLog:login")
+def complete_task_detail(request, task_id):
+    task = get_object_or_404(
+        Task.objects.select_related("affiliation", "owner"),
+        pk=task_id,
+        affiliation__members=request.user,
+    )
+
+    redirect_to_tasks = f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}"
+
+    if task.status == Task.Status.COMPLETED:
+        messages.warning(request, f"{task.name} has already been completed.")
+        return redirect(redirect_to_tasks)
+
+    form = TaskCompletionForm(instance=task)
+
+    if request.method == "POST":
+        form = TaskCompletionForm(request.POST, request.FILES, instance=task)
+        if form.is_valid():
+            with transaction.atomic():
+                locked_task = get_object_or_404(
+                    Task.objects.select_for_update().select_related("affiliation"),
+                    pk=task_id,
+                    affiliation__members=request.user,
+                )
+
+                if locked_task.status == Task.Status.COMPLETED:
+                    messages.warning(request, f"{locked_task.name} has already been completed.")
+                    return redirect(redirect_to_tasks)
+
+                proof = form.cleaned_data["proofs"]
+                locked_task.proofs = proof
+                locked_task.status = Task.Status.COMPLETED
+                locked_task.completed_by = request.user
+                locked_task.completed_at = timezone.now()
+                if locked_task.claimed_at is None:
+                    locked_task.claimed_at = locked_task.completed_at
+                locked_task.save(
+                    update_fields=[
+                        "proofs",
+                        "status",
+                        "completed_by",
+                        "completed_at",
+                        "claimed_at",
+                    ]
+                )
+
+                user_points = get_or_create_user_points(
+                    request.user,
+                    locked_task.affiliation,
+                    for_update=True,
+                )
+                user_points.points += locked_task.point_value
+                user_points.rewards = get_completion_reward(locked_task.affiliation)
+                user_points.save(update_fields=["points", "rewards"])
+
+            messages.success(
+                request,
+                f"{task.name} completed. You earned {task.point_value} point"
+                f"{'s' if task.point_value != 1 else ''} for {task.affiliation.party_name}.",
+            )
+            return redirect("QuestLog:leaderboard")
+
+    context = {
+        "profile": get_user_profile(request.user),
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user),
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "task": task,
+        "party": task.affiliation,
+        "form": form,
+    }
+    return render(request, "complete_task.html", context)
 
 
 def login_view(request):
@@ -187,10 +350,21 @@ def normalize_media_path(path):
 def serve_media(request, path):
     normalized_request_path = normalize_media_path(path)
     path_parts = PurePosixPath(normalized_request_path).parts
-    if len(path_parts) < 2 or path_parts[0] != "profile_pictures":
+    if len(path_parts) < 2:
         raise Http404("Media file not found.")
 
-    if not UserProfile.objects.filter(profile_picture=normalized_request_path).exists():
+    media_type = path_parts[0]
+    is_allowed_media = False
+
+    if media_type == "profile_pictures":
+        is_allowed_media = UserProfile.objects.filter(profile_picture=normalized_request_path).exists()
+    elif media_type == "proofs" and request.user.is_authenticated:
+        is_allowed_media = Task.objects.filter(
+            proofs=normalized_request_path,
+            affiliation__members=request.user,
+        ).exists()
+
+    if not is_allowed_media:
         raise Http404("Media file not found.")
 
     media_root = Path(settings.MEDIA_ROOT).resolve()
@@ -249,6 +423,118 @@ def profile(request):
 @login_required(login_url="QuestLog:login")
 def leaderboard(request):
     return renderPage(request, "leaderboard.html")
+
+
+@login_required(login_url="QuestLog:login")
+def rewards(request):
+    selected_guid = request.GET.get("guid") or request.POST.get("guid")
+    selected_party = getPartyDetails(request.user, selected_guid) if selected_guid else None
+
+    if selected_guid and selected_party is None:
+        messages.error(request, "Party not found or you do not have access to it.")
+        return redirect("QuestLog:rewards")
+
+    if selected_party is None:
+        selected_party = request.user.parties.order_by("party_name").first()
+
+    if selected_party is None:
+        context = {
+            "profile": get_user_profile(request.user),
+            "party_leaderboards": genLeaderboard(request.user),
+            "parties": getParties(request.user),
+            "pending_party_invitations": getPendingPartyInvitations(request.user),
+            "party": None,
+            "reward_form": RewardForm(),
+        }
+        return render(request, "rewards.html", context)
+
+    ensure_party_reward_catalog(selected_party, selected_party.creator)
+    user_points = get_or_create_user_points(request.user, selected_party)
+    reward_form = RewardForm()
+
+    if request.method == "POST":
+        if selected_party.creator_id != request.user.id:
+            messages.error(request, "Only the party creator can add rewards.")
+            return redirect(f"{reverse('QuestLog:rewards')}?guid={selected_party.guid}")
+
+        reward_form = RewardForm(request.POST)
+        if reward_form.is_valid():
+            reward = reward_form.save(commit=False)
+            reward.party = selected_party
+            reward.created_by = request.user
+            reward.class_attributes = reward.name
+            reward.save()
+            messages.success(request, f"{reward.name} was added to {selected_party.party_name}.")
+            return redirect(f"{reverse('QuestLog:rewards')}?guid={selected_party.guid}")
+
+    reward_catalog = (
+        Reward.objects
+        .filter(Q(party=selected_party) | Q(party__isnull=True), is_active=True, point_cost__gt=0)
+        .order_by("point_cost", "name", "class_attributes")
+    )
+    purchased_rewards = (
+        RewardPurchase.objects
+        .filter(user=request.user, party=selected_party)
+        .select_related("reward")
+    )
+
+    context = {
+        "profile": get_user_profile(request.user),
+        "party_leaderboards": genLeaderboard(request.user),
+        "parties": getParties(request.user),
+        "pending_party_invitations": getPendingPartyInvitations(request.user),
+        "party": selected_party,
+        "user_points": user_points,
+        "reward_catalog": reward_catalog,
+        "purchased_rewards": purchased_rewards,
+        "reward_form": reward_form,
+    }
+    return render(request, "rewards.html", context)
+
+
+@login_required(login_url="QuestLog:login")
+@require_POST
+def purchase_reward(request, reward_id):
+    reward = get_object_or_404(
+        Reward.objects.select_related("party"),
+        pk=reward_id,
+        is_active=True,
+        point_cost__gt=0,
+    )
+
+    party = reward.party
+    if party is None:
+        guid = request.POST.get("guid")
+        party = getPartyDetails(request.user, guid) if guid else None
+        if party is None:
+            messages.error(request, "Choose a party before redeeming that reward.")
+            return redirect("QuestLog:rewards")
+    elif not party.members.filter(pk=request.user.pk).exists():
+        raise Http404("Reward not found.")
+
+    redirect_to_rewards = f"{reverse('QuestLog:rewards')}?guid={party.guid}"
+
+    with transaction.atomic():
+        user_points = get_or_create_user_points(request.user, party, for_update=True)
+
+        if user_points.available_points < reward.point_cost:
+            messages.error(request, f"You need {reward.point_cost} points to redeem {reward.label}.")
+            return redirect(redirect_to_rewards)
+
+        user_points.spent_points += reward.point_cost
+        user_points.rewards = reward
+        user_points.save(update_fields=["spent_points", "rewards"])
+
+        RewardPurchase.objects.create(
+            user=request.user,
+            party=party,
+            reward=reward,
+            points_spent=reward.point_cost,
+        )
+
+    messages.success(request, f"{reward.label} redeemed for {reward.point_cost} points.")
+    return redirect(redirect_to_rewards)
+
 
 @login_required(login_url="QuestLog:login")
 def parties(request):
@@ -411,17 +697,15 @@ def create_party(request):
             party.members.add(request.user)
 
             # creator should have a userpoints row for this party
-            default_reward, _ = Reward.objects.get_or_create(
-                class_attributes="Default Reward"
-            )
             UserPoints.objects.get_or_create(
                 user=request.user,
                 party=party,
                 defaults={
                     "points": 0,
-                    "rewards": default_reward,
+                    "rewards": get_default_reward(),
                 },
             )
+            ensure_party_reward_catalog(party, request.user)
 
             # optional invite during creation
             if invited_username:
@@ -480,17 +764,15 @@ def accept_party_invitation(request, invitation_id):
     with transaction.atomic():
         invitation.party.members.add(request.user)
 
-        default_reward, _ = Reward.objects.get_or_create(
-            class_attributes="Default Reward"
-        )
         UserPoints.objects.get_or_create(
             user=request.user,
             party=invitation.party,
             defaults={
                 "points": 0,
-                "rewards": default_reward,
+                "rewards": get_default_reward(),
             },
         )
+        ensure_party_reward_catalog(invitation.party, invitation.party.creator)
 
         invitation.status = PartyInvitation.Status.ACCEPTED
         invitation.responded_at = timezone.now()

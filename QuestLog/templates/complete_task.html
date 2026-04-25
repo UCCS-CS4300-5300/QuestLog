@@ -1,23 +1,96 @@
 {% extends 'base.html' %}
-{% block title %}Home | Quest Log{% endblock %}
+{% block title %}Complete quest | Quest Log{% endblock %}
 
 {% block content %}
-    <h3>Progress</h3>
-    <div class="progress" style="height:20px">
-        <div class="progress-bar" style="width:40%;"></div>
+  {% if not request.user.is_authenticated %}
+    <div class="row justify-content-center">
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-body">
+            <h1 class="h3 mb-2">Complete a quest</h1>
+            <p class="text-muted mb-3">Log in to submit proof and earn party points.</p>
+            <a class="btn btn-primary" href="{% url 'QuestLog:login' %}?next={% url 'QuestLog:complete_task' %}">Log in</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% elif task %}
+    <div class="row justify-content-center">
+      <div class="col-lg-8 col-xl-6">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div>
+            <div class="mb-1">
+              <a class="link-secondary text-decoration-none" href="{% url 'QuestLog:tasks' %}?guid={{ party.guid }}">&larr; Back to tasks</a>
+            </div>
+            <h1 class="h3 mb-1">Complete {{ task.name }}</h1>
+            <div class="text-muted">{{ party.party_name }} &middot; {{ task.point_value }} point{{ task.point_value|pluralize }}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <div class="mb-3">
+              <div class="fw-semibold">{{ task.name }}</div>
+              <div class="text-muted">{{ task.description }}</div>
+            </div>
+
+            <form method="post" enctype="multipart/form-data">
+              {% csrf_token %}
+              {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+              {% endif %}
+
+              <div class="mb-3">
+                <label for="{{ form.proofs.id_for_label }}" class="form-label">Completion evidence</label>
+                {{ form.proofs }}
+                <div class="form-text">Accepted formats: JPG, PNG, GIF. Max size: 2 MB.</div>
+                {% if form.proofs.errors %}
+                  <div class="text-danger small mt-1">{{ form.proofs.errors }}</div>
+                {% endif %}
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Complete quest</button>
+                <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}?guid={{ party.guid }}">Cancel</a>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h1 class="h3 mb-1">Complete a quest</h1>
+        <div class="text-muted">Choose an available quest and submit evidence.</div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{% url 'QuestLog:tasks' %}">Task pool</a>
     </div>
 
-    <br>
-
-    <h1>Submit task photo #1</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <div class="mb-3">
-            <label for="formFile" class="form-label">Choose a file to upload</label>
-            <input class="form-control" type="file" id="formFile" name="file" accept="image/jpeg,image/png"/>
-        </div>
-        <div class="progress d-none mb-3">
-            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-        </div>
-        <button type="submit" class="btn btn-primary">Upload</button>
-    </form>
+    {% if available_tasks %}
+      <div class="row g-3">
+        {% for available_task in available_tasks %}
+          <div class="col-md-6">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <div>
+                    <h5 class="card-title mb-1">{{ available_task.name }}</h5>
+                    <div class="small text-muted">{{ available_task.affiliation.party_name }}</div>
+                  </div>
+                  <span class="badge text-bg-success">{{ available_task.point_value }} point{{ available_task.point_value|pluralize }}</span>
+                </div>
+                <p class="card-text text-muted">{{ available_task.description }}</p>
+                <a class="btn btn-primary btn-sm" href="{% url 'QuestLog:complete_task_detail' available_task.id %}">Submit proof</a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="card">
+        <div class="card-body text-muted">No available quests are ready for completion.</div>
+      </div>
+    {% endif %}
+  {% endif %}
 {% endblock %}

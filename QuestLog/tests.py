@@ -14,7 +14,7 @@ from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
 from .forms import CreateTaskForm, QuestLogUserCreationForm
-from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
+from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
 import json
@@ -32,6 +32,7 @@ EXPECTED_VIEW_GET_STATUSES = {
     'parties': 302,
     'party_details': 302,
     'leaderboard': 302,
+    'rewards': 302,
     'upload_task_proof': 200,
     'create_party': 302,
 }
@@ -54,7 +55,7 @@ class ViewReachabilityTests(TestCase):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
         
         # routes with required path parameters are tested separately
-        ignored_names = { "accept_party_invitation", "decline_party_invitation", "vote_task_difficulty" }
+        ignored_names = { "accept_party_invitation", "decline_party_invitation", "purchase_reward", "complete_task_detail", "vote_task_difficulty" }
         
         self.assertEqual(discovered_names - ignored_names, set(EXPECTED_VIEW_GET_STATUSES))
 
@@ -1000,6 +1001,10 @@ class LeaderboardViewTests(TestCase):
 
 class TaskWorkflowTests(TestCase):
     def setUp(self):
+        self.temp_media_root = tempfile.mkdtemp()
+        self.settings_override = self.settings(MEDIA_ROOT=self.temp_media_root)
+        self.settings_override.enable()
+
         User = get_user_model()
 
         self.creator = User.objects.create_user(
@@ -1027,6 +1032,31 @@ class TaskWorkflowTests(TestCase):
             creator=self.creator,
         )
         self.party.members.add(self.creator, self.party_member)
+
+    def tearDown(self):
+        self.settings_override.disable()
+        shutil.rmtree(self.temp_media_root, ignore_errors=True)
+
+    def make_task_proof(self, filename="proof.png"):
+        buffer = BytesIO()
+        Image.new("RGB", (1, 1), color="green").save(buffer, format="PNG")
+        return SimpleUploadedFile(
+            filename,
+            buffer.getvalue(),
+            content_type="image/png",
+        )
+
+    def create_task(self, **overrides):
+        defaults = {
+            "owner": self.creator,
+            "affiliation": self.party,
+            "name": "Restock supplies",
+            "description": "Refill potions, rope, and torches.",
+            "difficulty_rating": 4,
+            "point_value": 4,
+        }
+        defaults.update(overrides)
+        return Task.objects.create(**defaults)
 
     def test_create_task_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:create_task"))
@@ -1154,6 +1184,186 @@ class TaskWorkflowTests(TestCase):
                 voter=self.outsider,
             ).exists()
         )
+
+    def test_tasks_view_shows_complete_task_link(self):
+        task = self.create_task(name="Polish the relics")
+
+        self.client.force_login(self.party_member)
+        response = self.client.get(
+            reverse("QuestLog:tasks"),
+            {"guid": str(self.party.guid)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("QuestLog:complete_task_detail", args=[task.id]))
+
+    def test_party_member_can_complete_task_with_proof_and_earn_points(self):
+        task = self.create_task(
+            name="Clean the guild hall",
+            description="Sweep the floors and reset the tables after raid night.",
+            point_value=4,
+        )
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:complete_task_detail", args=[task.id]),
+            {"proofs": self.make_task_proof()},
+        )
+
+        task.refresh_from_db()
+        user_points = UserPoints.objects.get(user=self.party_member, party=self.party)
+
+        self.assertRedirects(response, reverse("QuestLog:leaderboard"))
+        self.assertEqual(task.status, Task.Status.COMPLETED)
+        self.assertEqual(task.completed_by, self.party_member)
+        self.assertIsNotNone(task.completed_at)
+        self.assertTrue(task.proofs.name.startswith("proofs/"))
+        self.assertEqual(user_points.points, 4)
+        self.assertEqual(user_points.rewards.name, "Quest Completion Reward")
+        self.assertEqual(user_points.rewards.party, self.party)
+
+    def test_completed_task_cannot_award_points_twice(self):
+        task = self.create_task(name="Reset the common room", point_value=5)
+
+        self.client.force_login(self.party_member)
+        self.client.post(
+            reverse("QuestLog:complete_task_detail", args=[task.id]),
+            {"proofs": self.make_task_proof("first.png")},
+        )
+        response = self.client.post(
+            reverse("QuestLog:complete_task_detail", args=[task.id]),
+            {"proofs": self.make_task_proof("second.png")},
+        )
+
+        task.refresh_from_db()
+        user_points = UserPoints.objects.get(user=self.party_member, party=self.party)
+
+        self.assertRedirects(response, reverse("QuestLog:tasks") + f"?guid={self.party.guid}")
+        self.assertEqual(task.completed_by, self.party_member)
+        self.assertEqual(user_points.points, 5)
+
+    def test_non_member_cannot_complete_task(self):
+        task = self.create_task(name="Private quest")
+
+        self.client.force_login(self.outsider)
+        response = self.client.post(
+            reverse("QuestLog:complete_task_detail", args=[task.id]),
+            {"proofs": self.make_task_proof()},
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(task.status, Task.Status.NOT_STARTED)
+        self.assertFalse(
+            UserPoints.objects.filter(user=self.outsider, party=self.party).exists()
+        )
+
+    def test_task_completion_requires_proof(self):
+        task = self.create_task(name="Proof required")
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:complete_task_detail", args=[task.id]),
+            {},
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Upload evidence before completing this quest.")
+        self.assertEqual(task.status, Task.Status.NOT_STARTED)
+
+    def test_party_member_can_purchase_reward_with_points(self):
+        reward = Reward.objects.create(
+            party=self.party,
+            name="Pick dinner",
+            class_attributes="Pick dinner",
+            description="Choose the next shared meal.",
+            point_cost=5,
+            created_by=self.creator,
+        )
+        user_points = UserPoints.objects.create(
+            user=self.party_member,
+            party=self.party,
+            points=7,
+            rewards=Reward.objects.create(class_attributes="Default Reward"),
+        )
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:purchase_reward", args=[reward.id]),
+            {"guid": str(self.party.guid)},
+        )
+
+        user_points.refresh_from_db()
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertEqual(user_points.points, 7)
+        self.assertEqual(user_points.spent_points, 5)
+        self.assertEqual(user_points.available_points, 2)
+        self.assertEqual(user_points.rewards, reward)
+        self.assertTrue(
+            RewardPurchase.objects.filter(
+                user=self.party_member,
+                party=self.party,
+                reward=reward,
+                points_spent=5,
+            ).exists()
+        )
+
+    def test_reward_purchase_requires_enough_points(self):
+        reward = Reward.objects.create(
+            party=self.party,
+            name="Choose movie night",
+            class_attributes="Choose movie night",
+            point_cost=10,
+            created_by=self.creator,
+        )
+        user_points = UserPoints.objects.create(
+            user=self.party_member,
+            party=self.party,
+            points=4,
+            rewards=Reward.objects.create(class_attributes="Default Reward"),
+        )
+
+        self.client.force_login(self.party_member)
+        response = self.client.post(
+            reverse("QuestLog:purchase_reward", args=[reward.id]),
+            {"guid": str(self.party.guid)},
+        )
+
+        user_points.refresh_from_db()
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertEqual(user_points.points, 4)
+        self.assertEqual(user_points.spent_points, 0)
+        self.assertFalse(
+            RewardPurchase.objects.filter(
+                user=self.party_member,
+                party=self.party,
+                reward=reward,
+            ).exists()
+        )
+
+    def test_party_creator_can_add_reward_to_shop(self):
+        self.client.force_login(self.creator)
+        response = self.client.post(
+            reverse("QuestLog:rewards") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "name": "Skip dish duty",
+                "description": "Redeem for one agreed chore pass.",
+                "point_cost": 8,
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertTrue(
+            Reward.objects.filter(
+                party=self.party,
+                name="Skip dish duty",
+                point_cost=8,
+                created_by=self.creator,
+            ).exists()
+        )
+
 
 class PartyInvitationWorkflowTests(TestCase):
     def setUp(self):

@@ -21,10 +21,16 @@
                   {{ entry.standings|length }} member{{ entry.standings|length|pluralize }}
                 </div>
               </div>
-              <a class="btn btn-sm btn-outline-secondary"
-                 href="{% url 'QuestLog:party_details' %}?guid={{ entry.party.guid }}">
-                View party
-              </a>
+              <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{% url 'QuestLog:party_details' %}?guid={{ entry.party.guid }}">
+                  View party
+                </a>
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{% url 'QuestLog:rewards' %}?guid={{ entry.party.guid }}">
+                  Rewards
+                </a>
+              </div>
             </div>
 
             <div class="card-body">
@@ -35,6 +41,7 @@
                       <tr>
                         <th>Rank</th>
                         <th>Member</th>
+                        <th>Reward</th>
                         <th class="text-end">Points</th>
                       </tr>
                     </thead>
@@ -52,6 +59,7 @@
                               <span class="badge text-bg-primary ms-2">You</span>
                             {% endif %}
                           </td>
+                          <td>{{ score.rewards.label }}</td>
                           <td class="text-end">{{ score.points }}</td>
                         </tr>
                       {% endfor %}

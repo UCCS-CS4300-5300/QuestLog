@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Party, PartyInvitation, Task, TaskDifficultyVote, UserProfile
+from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile
 
 
 @admin.register(UserProfile)
@@ -24,7 +24,7 @@ class PartyInvitationAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ("name", "affiliation", "owner", "difficulty_rating", "point_value", "status")
+    list_display = ("name", "affiliation", "owner", "completed_by", "difficulty_rating", "point_value", "status")
     list_filter = ("status", "affiliation")
     search_fields = ("name", "description", "owner__username", "affiliation__party_name")
 
@@ -34,3 +34,24 @@ class TaskDifficultyVoteAdmin(admin.ModelAdmin):
     list_display = ("task", "voter", "rating", "updated_at")
     list_filter = ("rating",)
     search_fields = ("task__name", "voter__username")
+
+
+@admin.register(Reward)
+class RewardAdmin(admin.ModelAdmin):
+    list_display = ("label", "party", "point_cost", "is_active", "created_by")
+    list_filter = ("is_active", "party")
+    search_fields = ("name", "class_attributes", "description", "party__party_name")
+
+
+@admin.register(UserPoints)
+class UserPointsAdmin(admin.ModelAdmin):
+    list_display = ("user", "party", "points", "spent_points", "rewards")
+    list_filter = ("party",)
+    search_fields = ("user__username", "party__party_name")
+
+
+@admin.register(RewardPurchase)
+class RewardPurchaseAdmin(admin.ModelAdmin):
+    list_display = ("user", "party", "reward", "points_spent", "purchased_at")
+    list_filter = ("party", "reward")
+    search_fields = ("user__username", "party__party_name", "reward__name")

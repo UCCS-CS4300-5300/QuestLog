@@ -9,6 +9,7 @@ urlpatterns = [
     path('tasks/', views.tasks, name='tasks'),
     path('tasks/create/', views.create_task, name='create_task'),
     path('tasks/<int:task_id>/difficulty/', views.vote_task_difficulty, name='vote_task_difficulty'),
+    path('tasks/<int:task_id>/complete/', views.complete_task_detail, name='complete_task_detail'),
     path('complete_task/', views.complete_task, name='complete_task'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
@@ -19,6 +20,8 @@ urlpatterns = [
     path('parties/', views.parties, name='parties'), #join lives here
     path('party_details/', views.party_details, name='party_details'), #MAY NEED TO BE /parties/guid/ 
     path('leaderboard/', views.leaderboard, name='leaderboard'),
+    path('rewards/', views.rewards, name='rewards'),
+    path('rewards/<int:reward_id>/purchase/', views.purchase_reward, name='purchase_reward'),
     path('create_party/', views.create_party, name='create_party'),
     path('upload/', views.upload_task_proof, name='upload_task_proof'),
 

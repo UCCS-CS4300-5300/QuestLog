@@ -96,7 +96,9 @@
                     <th>Task</th>
                     <th>Status</th>
                     <th>Owner</th>
+                    <th>Completed by</th>
                     <th class="text-end">Difficulty</th>
+                    <th class="text-end">Points</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -108,7 +110,18 @@
                       </td>
                       <td>{{ task.get_status_display }}</td>
                       <td>{{ task.owner.username }}</td>
+                      <td>
+                        {% if task.completed_by %}
+                          {{ task.completed_by.username }}
+                          {% if task.proofs %}
+                            <a class="small d-block" href="{{ task.proofs.url }}">View proof</a>
+                          {% endif %}
+                        {% else %}
+                          <a class="btn btn-sm btn-outline-primary" href="{% url 'QuestLog:complete_task_detail' task.id %}">Complete</a>
+                        {% endif %}
+                      </td>
                       <td class="text-end">{{ task.weighted_difficulty_display }}/5</td>
+                      <td class="text-end">{{ task.point_value }}</td>
                     </tr>
                   {% endfor %}
                 </tbody>

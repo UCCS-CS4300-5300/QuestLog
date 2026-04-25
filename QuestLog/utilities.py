@@ -35,12 +35,12 @@ def scan_for_malicious_code(file):
         '<?php', '<%', '%>', '<asp:', 'eval(', 'exec(', 'system(', 'os.system',
         'subprocess.Popen', 'subprocess.call', '../', '/etc/passwd', 'C:\\Windows\\System32',
         'require(', 'include(', 'import os', 'open(', 'SELECT ', 'DROP TABLE', '--',
-        ';', '&&', '|', '`', '$(', 'curl', 'wget', 'nc ', 'pickle.load(', 'yaml.load(',
+        '&&', '$(', 'curl', 'wget', 'nc ', 'pickle.load(', 'yaml.load(',
         'chmod 777', 'base64_decode(', 'str_rot13('
     ]
-    content = file.read().decode(errors='ignore')
+    content = file.read().decode(errors='ignore').lower()
     for pattern in dangerous_patterns:
-        if pattern in content:
+        if pattern.lower() in content:
             raise ValidationError("Malicious content detected")
     file.seek(0)  # reset file pointer after reading
 

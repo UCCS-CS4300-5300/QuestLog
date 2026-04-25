@@ -15,6 +15,8 @@ Primary Render URL: https://questlog-khx0.onrender.com
 - Account login with safe redirect handling
 - Auth-protected profile page
 - User profile storage backed by Django `auth.User` plus a `UserProfile` record
+- Party task completion with uploaded image proof, point awards, and leaderboard updates
+- Party reward shop where members can redeem points and creators can add rewards
 - Static asset support and local media support while `DEBUG=True`
 - Automated Django tests, behave tests, coverage reporting, and CI checks
 

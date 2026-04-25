@@ -64,7 +64,7 @@ def genLeaderboard(user):
     points_rows = (
         UserPoints.objects
         .filter(party__in=user_parties)
-        .select_related("user", "party", "user__profile")
+        .select_related("user", "party", "rewards", "user__profile")
         .order_by("party__party_name", "-points", "user__username")
     )
 
@@ -105,7 +105,7 @@ def getPartyDetails(user, guid):
 def getPartyTasks(party):
     return (
         Task.objects.filter(affiliation=party)
-        .select_related("owner")
+        .select_related("owner", "completed_by")
         .prefetch_related("difficulty_votes__voter")
         .order_by("status", "-created_at")
     )
@@ -123,7 +123,52 @@ def getPendingPartyInvitations(user):
     )
 
 class Reward(models.Model):
-    class_attributes = models.CharField(default="To be determined",max_length=100)
+    class_attributes = models.CharField(default="To be determined", max_length=100)
+    party = models.ForeignKey(
+        "Party",
+        on_delete=models.CASCADE,
+        related_name="reward_catalog",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=120, blank=True)
+    description = models.TextField(max_length=300, blank=True)
+    point_cost = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_rewards",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    @property
+    def label(self):
+        return self.name or self.class_attributes
+
+    def __str__(self):
+        return self.label
+
+
+def get_default_reward():
+    reward, created = Reward.objects.get_or_create(
+        class_attributes="Default Reward",
+        party=None,
+        defaults={
+            "name": "Default Reward",
+            "description": "Tracks party membership before a reward is purchased.",
+            "point_cost": 0,
+        },
+    )
+
+    if not created and not reward.name:
+        reward.name = "Default Reward"
+        reward.save(update_fields=["name"])
+
+    return reward
+
 
 class PartySecret(models.Model):
     _secret_hash = models.CharField(max_length=128, editable=False)
@@ -173,6 +218,7 @@ class UserPoints(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     party = models.ForeignKey(Party, on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
+    spent_points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward, on_delete=models.PROTECT)
     avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file])
 
@@ -183,6 +229,23 @@ class UserPoints(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.party.party_name}: {self.points}"
 
+    @property
+    def available_points(self):
+        return max(self.points - self.spent_points, 0)
+
+
+class RewardPurchase(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reward_purchases")
+    party = models.ForeignKey(Party, on_delete=models.CASCADE, related_name="reward_purchases")
+    reward = models.ForeignKey(Reward, on_delete=models.PROTECT, related_name="purchases")
+    points_spent = models.PositiveIntegerField()
+    purchased_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-purchased_at"]
+
+    def __str__(self):
+        return f"{self.user.username} bought {self.reward.label} in {self.party.party_name}"
 
 
 class Task(models.Model):
@@ -210,6 +273,13 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     claimed_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_tasks",
+    )
 
     def __str__(self):
         return self.name
