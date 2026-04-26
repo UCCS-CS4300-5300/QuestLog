@@ -1214,6 +1214,7 @@ class TaskWorkflowTests(TestCase):
                 "name": "Clean the guild hall",
                 "description": "Sweep the floors and reset the tables after raid night.",
                 "difficulty_rating": 4,
+                "recurring": 0,
             },
         )
 
@@ -1223,6 +1224,7 @@ class TaskWorkflowTests(TestCase):
         self.assertEqual(task.affiliation, self.party)
         self.assertEqual(task.owner, self.creator)
         self.assertEqual(task.difficulty_rating, 4)
+        self.assertEqual(task.point_value, 40)
         self.assertTrue(
             TaskDifficultyVote.objects.filter(
                 task=task,
@@ -1651,6 +1653,242 @@ class PartyInvitationWorkflowTests(TestCase):
         self.assertContains(response, "Profile Invite Party")
         self.assertContains(response, "Accept")
         self.assertContains(response, "Decline")
+
+class TaskDifficultyAndRecurringTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="difficultyuser",
+            email="difficultyuser@example.com",
+            password="test-password",
+        )
+        self.other_user = get_user_model().objects.create_user(
+            username="difficultyfriend",
+            email="difficultyfriend@example.com",
+            password="test-password",
+        )
+
+        get_user_profile(self.user)
+        get_user_profile(self.other_user)
+
+        self.party = Party.objects.create(
+            party_name="Difficulty Party",
+            creator=self.user,
+        )
+        self.party.members.add(self.user, self.other_user)
+
+    def test_create_task_form_allows_difficulty_ten(self):
+        form = CreateTaskForm(
+            data={
+                "affiliation": self.party.id,
+                "name": "Hard Quest",
+                "description": "A very hard quest.",
+                "difficulty_rating": 10,
+                "recurring": 0,
+            },
+            user=self.user,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_create_task_form_rejects_difficulty_above_ten(self):
+        form = CreateTaskForm(
+            data={
+                "affiliation": self.party.id,
+                "name": "Too Hard Quest",
+                "description": "This should fail.",
+                "difficulty_rating": 11,
+                "recurring": 0,
+            },
+            user=self.user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("difficulty_rating", form.errors)
+
+    def test_create_task_form_allows_recurring_zero(self):
+        form = CreateTaskForm(
+            data={
+                "affiliation": self.party.id,
+                "name": "One Time Quest",
+                "description": "A normal one-time task.",
+                "difficulty_rating": 4,
+                "recurring": 0,
+            },
+            user=self.user,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_create_task_form_allows_positive_recurring_days(self):
+        form = CreateTaskForm(
+            data={
+                "affiliation": self.party.id,
+                "name": "Repeat Quest",
+                "description": "A repeating task.",
+                "difficulty_rating": 6,
+                "recurring": 7,
+            },
+            user=self.user,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_create_task_form_rejects_negative_recurring_days(self):
+        form = CreateTaskForm(
+            data={
+                "affiliation": self.party.id,
+                "name": "Bad Repeat Quest",
+                "description": "Negative recurring should fail.",
+                "difficulty_rating": 6,
+                "recurring": -1,
+            },
+            user=self.user,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("recurring", form.errors)
+
+    def test_create_task_post_sets_points_to_difficulty_times_ten(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "affiliation": self.party.id,
+                "name": "Ten Point Scale Quest",
+                "description": "Testing point calculation.",
+                "difficulty_rating": 7,
+                "recurring": 0,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        task = Task.objects.get(name="Ten Point Scale Quest")
+        self.assertEqual(task.difficulty_rating, 7)
+        self.assertEqual(task.point_value, 70)
+
+    def test_create_task_post_saves_recurring_value(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "affiliation": self.party.id,
+                "name": "Weekly Quest",
+                "description": "Testing recurring save.",
+                "difficulty_rating": 5,
+                "recurring": 7,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        task = Task.objects.get(name="Weekly Quest")
+        self.assertEqual(task.recurring, 7)
+
+    def test_task_sync_point_value_uses_difficulty_times_ten(self):
+        task = Task.objects.create(
+            owner=self.user,
+            name="Sync Quest",
+            description="Sync test",
+            affiliation=self.party,
+            difficulty_rating=8,
+            recurring=0,
+            point_value=0,
+        )
+
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.user,
+            rating=8,
+        )
+
+        task.sync_point_value_with_difficulty()
+        task.refresh_from_db()
+
+        self.assertEqual(task.point_value, 80)
+
+    def test_vote_task_difficulty_accepts_ten(self):
+        task = Task.objects.create(
+            owner=self.user,
+            name="Vote Quest",
+            description="Voting test",
+            affiliation=self.party,
+            difficulty_rating=4,
+            recurring=0,
+            point_value=40,
+        )
+
+        self.client.force_login(self.other_user)
+        response = self.client.post(
+            reverse("QuestLog:vote_task_difficulty", args=[task.id]),
+            {"rating": 10},
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        vote = TaskDifficultyVote.objects.get(task=task, voter=self.other_user)
+        self.assertEqual(vote.rating, 10)
+
+    def test_tasks_page_shows_recurring_text_for_recurring_task(self):
+        task = Task.objects.create(
+            owner=self.user,
+            name="Recurring Quest",
+            description="Recurring task display test",
+            affiliation=self.party,
+            difficulty_rating=6,
+            recurring=3,
+            point_value=60,
+            status=Task.Status.NOT_STARTED,
+        )
+
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.user,
+            rating=6,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("QuestLog:tasks"), {"guid": str(self.party.guid)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Repeats every 3 days")
+
+    def test_tasks_page_uses_ten_point_scale_text(self):
+        task = Task.objects.create(
+            owner=self.user,
+            name="Scale Quest",
+            description="Scale display test",
+            affiliation=self.party,
+            difficulty_rating=9,
+            recurring=0,
+            point_value=90,
+            status=Task.Status.NOT_STARTED,
+        )
+
+        TaskDifficultyVote.objects.create(
+            task=task,
+            voter=self.user,
+            rating=9,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("QuestLog:tasks"), {"guid": str(self.party.guid)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "/10")
+
+    def test_about_page_shows_updated_feature_text(self):
+        response = self.client.get(reverse("QuestLog:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "About QuestLog")
+        self.assertContains(response, "Difficulty & Points")
+        self.assertContains(response, "Recurring Tasks")
+        self.assertContains(response, "difficulty × 10")
 
 
 

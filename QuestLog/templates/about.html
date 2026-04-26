@@ -2,12 +2,89 @@
 {% block title %}About | QuestLog{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Quest Log about page</h1>
-    <p>This application is designed to help you track your quests and achievements (Chores).</p>
-    <h2>Stakeholders</h2>
-    <ul>
-        <li>Primary stakeholders: customer + end users</li>
-        <li>Secondary stakeholders: development team</li>
-    </ul>
-    <a href="{% url 'QuestLog:home' %}">Home</a>
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="mb-4">
+        <h1 class="display-6 fw-semibold mb-2">About QuestLog</h1>
+        <p class="lead text-muted mb-0">
+          QuestLog turns everyday chores and responsibilities into a game-like quest system for groups, roommates, and teams.
+        </p>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-3">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title">Task Management</h5>
+              <p class="card-text text-muted">
+                Create tasks, assign them to a party, and keep track of what still needs to be done.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title">Difficulty & Points</h5>
+              <p class="card-text text-muted">
+                Each task has a difficulty from 1 to 10, and points scale with that difficulty to reward harder work.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title">Recurring Tasks</h5>
+              <p class="card-text text-muted">
+                Repeating chores can be set up as recurring tasks so important responsibilities stay visible over time.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title">Parties & Collaboration</h5>
+              <p class="card-text text-muted">
+                Users can create parties, invite members, and work together inside a shared task pool.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <h4 class="mb-3">How QuestLog Works</h4>
+          <ul class="mb-0">
+            <li>Users join or create a party.</li>
+            <li>Tasks are added to that party’s shared quest pool.</li>
+            <li>Difficulty is rated on a 1 to 10 scale.</li>
+            <li>Points are based on difficulty × 10.</li>
+            <li>Members can complete tasks and submit proof when needed.</li>
+            <li>Recurring tasks can be reused for repeated responsibilities.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <h4 class="mb-3">Stakeholders</h4>
+          <ul class="mb-0">
+            <li><strong>Primary stakeholders:</strong> customers and end users</li>
+            <li><strong>Secondary stakeholders:</strong> the development team</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a href="{% url 'QuestLog:home' %}" class="btn btn-primary">Back to Home</a>
+        <a href="{% url 'QuestLog:tasks' %}" class="btn btn-outline-secondary">View Tasks</a>
+      </div>
+    </div>
+  </div>
 {% endblock %}

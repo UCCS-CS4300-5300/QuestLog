@@ -201,7 +201,7 @@ class Task(models.Model):
     )
     difficulty_rating = models.PositiveSmallIntegerField(
         default=1,
-        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
     )
     point_value = models.PositiveIntegerField(default=0)
     proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) #pictures of completed task
@@ -252,7 +252,7 @@ class Task(models.Model):
         return self.difficulty_votes.filter(voter=user).first()
 
     def sync_point_value_with_difficulty(self, save=True):
-        self.point_value = round(self.weighted_difficulty)
+        self.point_value = round(self.weighted_difficulty * 10)
         if save:
             self.save(update_fields=["point_value"])
         return self.point_value
@@ -262,7 +262,7 @@ class TaskDifficultyVote(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="difficulty_votes")
     voter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="task_difficulty_votes")
     rating = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

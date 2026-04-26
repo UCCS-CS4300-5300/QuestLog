@@ -60,7 +60,7 @@
                 <h5 class="card-title mb-1">{{ task.name }}</h5>
                 <p class="card-text text-muted mb-0">{{ task.description }}</p>
               </div>
-              <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/5</span>
+              <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/10</span>
               <a class="btn btn-primary" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">Start Task</a>
             </div>
 
@@ -69,8 +69,26 @@
               &middot; {{ task.difficulty_vote_count }} vote{{ task.difficulty_vote_count|pluralize }}
               {% if task.recurring %}
                 &middot; Repeats every {{ task.recurring }} day{{ task.recurring|pluralize }}
+              {% else %}
+                &middot; One-time task
               {% endif %}
             </p>
+             <p class="card-text small mb-0">
+                  <strong>Worth:</strong> {{ task.point_value }} points
+                </p>
+              </div>
+
+              <div class="text-end">
+                <span class="badge text-bg-success mb-2 d-inline-block">
+                  Difficulty {{ task.weighted_difficulty_display }}/10
+                </span>
+                <div>
+                  <a class="btn btn-primary btn-sm" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">
+                    Start Task
+                  </a>
+                </div>
+              </div>
+            </div>
 
             <form method="post" action="{% url 'QuestLog:vote_task_difficulty' task.id %}">
               {% csrf_token %}
@@ -86,7 +104,7 @@
                   <select id="difficulty-{{ task.id }}" name="rating" class="form-select form-select-sm">
                     {% for rating_value, rating_label in difficulty_rating_choices %}
                       <option value="{{ rating_value }}" {% if task.current_user_rating == rating_value %}selected{% endif %}>
-                        {{ rating_label }}/5
+                        {{ rating_label }}/10
                       </option>
                     {% endfor %}
                   </select>
