@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Task History | Quest Log{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="mb-3">
+            <a href="{% url 'QuestLog:tasks' %}" class="btn btn-outline-secondary">Back To Active Tasks</a>
+        </div>
+
+        {% if tasks %}
+            {% for task in tasks %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ task.name }}</h5>
+                        <p class="card-text">{{ task.description|striptags }}</p>
+                        <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
+                        <p class="card-text mb-1">
+                            <strong>Completed by:</strong>
+                            {% if task.completed_by %}
+                                {{ task.completed_by.username }}
+                            {% else %}
+                                {{ task.owner.username }}
+                            {% endif %}
+                        </p>
+                        {% if task.completed_at %}
+                            <p class="card-text mb-2"><strong>Completed:</strong> {{ task.completed_at }}</p>
+                        {% endif %}
+
+                        {% if task.proofs %}
+                            <p class="card-text mb-1"><strong>Proof:</strong></p>
+                            <img
+                                src="{{ task.proofs.url }}"
+                                alt="Proof for {{ task.name }}"
+                                style="width: 240px; height: 180px; object-fit: cover; border-radius: 8px;"
+                            />
+                        {% else %}
+                            <p class="card-text">No proof file attached.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No completed tasks found yet.</p>
+        {% endif %}
+    </div>
+{% endblock %}

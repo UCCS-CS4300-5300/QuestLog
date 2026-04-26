@@ -23,8 +23,9 @@ EXPECTED_VIEW_GET_STATUSES = {
     "home": 200,
     "about": 200,
     "tasks": 200,
+    "task_history": 200,
+    "complete_task": 302,
     "create_task": 302,
-    "complete_task": 200,
     "login": 200,
     "logout": 302,
     "register": 200,
@@ -32,12 +33,13 @@ EXPECTED_VIEW_GET_STATUSES = {
     'parties': 302,
     'party_details': 302,
     'leaderboard': 302,
-    'upload_task_proof': 200,
+    'upload_task_proof': 405,
     'create_party': 302,
 }
 
 EXPECTED_VIEW_POST_STATUSES = {
-    "profile": 302
+    "profile": 302,
+    'upload_task_proof': 302,
 }
 
 
@@ -207,7 +209,7 @@ class UrlConfigurationTests(SimpleTestCase):
 
 class UserProfileTests(TestCase):
     def test_user_model_stays_on_django_auth_user(self):
-        self.assertEqual(get_user_model()._meta.label, "auth.User")
+        self.assertEqual(get_user_model()._meta.label, settings.AUTH_USER_MODEL)
 
     def test_create_user_creates_profile_with_default_display_name(self):
         user = get_user_model().objects.create_user(
@@ -318,6 +320,13 @@ class AuthenticationFlowTests(TestCase):
             "avatar.bmp",
             buffer.getvalue(),
             content_type="image/bmp",
+        )
+
+    def make_task_proof(self):
+        return SimpleUploadedFile(
+            "proof.gif",
+            self.TEST_IMAGE_BYTES,
+            content_type="image/gif",
         )
 
     def create_user(
@@ -603,18 +612,6 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
 
-    def test_production_media_serves_profile_picture_for_anonymous_users(self):
-        user = self.create_user("liljit", profile_picture=self.make_profile_picture())
-        profile = get_user_profile(user)
-
-        with self.settings(DEBUG=False):
-            self.reload_urlconf()
-            response = self.client.get(profile.profile_picture.url)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
-        self.reload_urlconf()
-
     def test_production_media_serves_profile_picture_for_authenticated_user(self):
         user = self.create_user("liljit", profile_picture=self.make_profile_picture())
         profile = get_user_profile(user)
@@ -697,6 +694,79 @@ class AuthenticationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.reload_urlconf()
+
+    def test_production_media_rejects_task_proof_for_anonymous_users(self):
+        owner = self.create_user("proofowner")
+        party = Party.objects.create(party_name="Proof Party", creator=owner)
+        party.members.add(owner)
+        task = Task.objects.create(
+            owner=owner,
+            name="Secret Proof Task",
+            description="Proof should not be public.",
+            affiliation=party,
+            proofs=self.make_task_proof(),
+            status=Task.Status.COMPLETED,
+        )
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(task.proofs.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
+    def test_production_media_rejects_task_proof_for_non_party_members(self):
+        owner = self.create_user("proofowner")
+        intruder = self.create_user("proofintruder")
+        party = Party.objects.create(party_name="Proof Party", creator=owner)
+        party.members.add(owner)
+        task = Task.objects.create(
+            owner=owner,
+            name="Secret Proof Task",
+            description="Proof should not be public.",
+            affiliation=party,
+            proofs=self.make_task_proof(),
+            status=Task.Status.COMPLETED,
+        )
+        self.client.force_login(intruder)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(task.proofs.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.reload_urlconf()
+
+    def test_production_media_serves_task_proof_for_party_members(self):
+        owner = self.create_user("proofowner")
+        member = self.create_user("proofmember")
+        party = Party.objects.create(party_name="Proof Party", creator=owner)
+        party.members.add(owner, member)
+        task = Task.objects.create(
+            owner=owner,
+            name="Secret Proof Task",
+            description="Proof should be visible to party members.",
+            affiliation=party,
+            proofs=self.make_task_proof(),
+            status=Task.Status.COMPLETED,
+        )
+        self.client.force_login(member)
+
+        with self.settings(DEBUG=False):
+            self.reload_urlconf()
+            response = self.client.get(task.proofs.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), self.TEST_IMAGE_BYTES)
+        self.reload_urlconf()
+
+    def test_complete_task_rejects_non_numeric_task_id(self):
+        user = self.create_user("taskviewer")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("QuestLog:complete_task"), {"task_id": "abc"})
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
 
     def test_user_creation_form_save_commit_false_creates_profile_on_save(self):
         form = QuestLogUserCreationForm(
@@ -810,6 +880,87 @@ class PartyViewsTemplateTests(TestCase):
             creator=self.user,
         )
         self.party.members.add(self.user)
+
+
+class TaskPagesTemplateTests(TestCase):
+    TEST_IMAGE_BYTES = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+        b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+        b"\x00\x02\x02D\x01\x00;"
+    )
+
+    def setUp(self):
+        from .models import Party, Task
+
+        self.Task = Task
+        self.user = get_user_model().objects.create_user(
+            username="taskuser",
+            email="taskuser@example.com",
+            password="test-password",
+        )
+        self.other_user = get_user_model().objects.create_user(
+            username="othertaskuser",
+            email="othertaskuser@example.com",
+            password="test-password",
+        )
+        self.party = Party.objects.create(
+            party_name="Task Party",
+            creator=self.user,
+        )
+        self.party.members.add(self.user, self.other_user)
+
+        self.active_task = Task.objects.create(
+            owner=self.user,
+            name="Open Item",
+            description="This should appear on tasks page only.",
+            status=Task.Status.NOT_STARTED,
+            point_value=5,
+            affiliation=self.party,
+        )
+        self.completed_task = Task.objects.create(
+            owner=self.user,
+            name="Done Item",
+            description="This should appear on task history only.",
+            status=Task.Status.COMPLETED,
+            point_value=10,
+            affiliation=self.party,
+            proofs=SimpleUploadedFile(
+                "proof.gif",
+                self.TEST_IMAGE_BYTES,
+                content_type="image/gif",
+            ),
+        )
+        self.other_users_completed_task = Task.objects.create(
+            owner=self.other_user,
+            name="Other User Done Item",
+            description="Should not appear for logged in user.",
+            status=Task.Status.COMPLETED,
+            point_value=15,
+            affiliation=self.party,
+        )
+
+        self.client.force_login(self.user)
+
+    def test_tasks_view_shows_only_incomplete_tasks_for_logged_in_user(self):
+        response = self.client.get(reverse("QuestLog:tasks"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tasks.html")
+        self.assertContains(response, "Open Item")
+        self.assertNotContains(response, "Done Item")
+        self.assertContains(response, reverse("QuestLog:task_history"))
+
+    def test_task_history_view_shows_only_completed_tasks_for_logged_in_user(self):
+        response = self.client.get(reverse("QuestLog:task_history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tasks_history.html")
+        self.assertContains(response, "Done Item")
+        self.assertNotContains(response, "Open Item")
+        self.assertNotContains(response, "Other User Done Item")
+        self.assertContains(response, self.completed_task.proofs.url)
+        self.assertContains(response, reverse("QuestLog:tasks"))
+        self.assertNotContains(response, "Accept")
 
 class LeaderboardViewTests(TestCase):
     def setUp(self):

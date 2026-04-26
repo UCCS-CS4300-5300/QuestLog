@@ -15,10 +15,11 @@ from rest_framework.response import Response
 from rest_framework.renderers import JSONRenderer
 from django.db import transaction
 from django.views.decorators.http import require_POST
-
 from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, TaskDifficultyVoteForm
 from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
+
+from PIL import Image
 
 User = get_user_model()
 
@@ -105,8 +106,15 @@ def about(request):
 
 
 def tasks(request):
-    # if missing then show the party selection screen
-    guid =request.GET.get("guid")
+    # If guid is missing and user has exactly one party, default to it.
+    # This keeps `/tasks/` useful while preserving party selection for multi-party users.
+    guid = request.GET.get("guid")
+    if not guid and request.user.is_authenticated:
+        user_parties = getParties(request.user)
+        if user_parties.count() == 1:
+            guid = str(user_parties.first().guid)
+
+    # if still missing then show the party selection screen
     if not guid:
         return renderPage(request, "tasks.html")
     #if theres a party selected then verify membership and build task pool context
@@ -137,8 +145,45 @@ def tasks(request):
     return render(request, "tasks.html",context)
 
 
+def task_history(request):
+    if request.user.is_authenticated:
+        completed_tasks = (
+            Task.objects.filter(owner=request.user, status=Task.Status.COMPLETED)
+            .select_related("owner", "affiliation")
+            .order_by("-completed_at", "-created_at")
+        )
+        context = {
+            "profile": get_user_profile(request.user),
+            "party_leaderboards": genLeaderboard(request.user),
+            "parties": getParties(request.user),
+            "pending_party_invitations": getPendingPartyInvitations(request.user),
+            "tasks": list(completed_tasks),
+        }
+        return render(request, "tasks_history.html", context)
+    return render(request, "tasks_history.html", {"tasks": []})
+
+
 def complete_task(request):
-    return renderPage(request, "complete_task.html")
+    if not request.user.is_authenticated:
+        return redirect("QuestLog:login")
+
+    task_id = request.GET.get("task_id")
+    try:
+        task_id = int(task_id)
+    except (TypeError, ValueError):
+        messages.error(request, "Task not found.")
+        return redirect("QuestLog:tasks")
+
+    task = (
+        Task.objects.filter(id=task_id, owner=request.user)
+        .exclude(status=Task.Status.COMPLETED)
+        .first()
+    )
+    if task is None:
+        messages.error(request, "Task not found.")
+        return redirect("QuestLog:tasks")
+
+    return render(request, "complete_task.html", {"task": task})
 
 
 def login_view(request):
@@ -187,11 +232,41 @@ def normalize_media_path(path):
 def serve_media(request, path):
     normalized_request_path = normalize_media_path(path)
     path_parts = PurePosixPath(normalized_request_path).parts
-    if len(path_parts) < 2 or path_parts[0] != "profile_pictures":
+    if len(path_parts) < 2:
         raise Http404("Media file not found.")
 
-    if not UserProfile.objects.filter(profile_picture=normalized_request_path).exists():
+    allowed_roots = {"profile_pictures", "proofs"}
+    if path_parts[0] not in allowed_roots:
         raise Http404("Media file not found.")
+
+    if not request.user.is_authenticated:
+        raise Http404("Media file not found.")
+
+    is_profile_picture_request = path_parts[0] == "profile_pictures"
+    if is_profile_picture_request:
+
+        is_known_profile_picture = UserProfile.objects.filter(
+            profile_picture=normalized_request_path
+        ).exists()
+        if not is_known_profile_picture:
+            raise Http404("Media file not found.")
+    else:
+        task_with_proof = (
+            Task.objects
+            .select_related("affiliation")
+            .filter(proofs=normalized_request_path)
+            .first()
+        )
+        if task_with_proof is None:
+            raise Http404("Media file not found.")
+
+        can_access_proof = task_with_proof.owner_id == request.user.id
+        if not can_access_proof:
+            can_access_proof = task_with_proof.affiliation.members.filter(
+                pk=request.user.pk
+            ).exists()
+        if not can_access_proof:
+            raise Http404("Media file not found.")
 
     media_root = Path(settings.MEDIA_ROOT).resolve()
 
@@ -520,6 +595,45 @@ def decline_party_invitation(request, invitation_id):
     messages.info(request, f"You declined the invitation to {invitation.party.party_name}.")
     return redirect("QuestLog:profile")
 
+MAX_FILE_SIZE = 5*1024*1024
+IMAGE_TYPES = ["image/avif", "image/gif", "image/bmp", "image/jpeg", "image/png", "image/webp"]
 
+@require_POST
 def upload_task_proof(request):
-    return render(request, 'upload_task_proof.html')
+    if not request.user.is_authenticated:
+        return redirect("QuestLog:login")
+
+    file1 = request.FILES.get("proof_file")
+    task_id = request.POST.get("task_id")
+    task = (
+        Task.objects.filter(id=task_id, owner=request.user)
+        .exclude(status=Task.Status.COMPLETED)
+        .first()
+    )
+
+    if task is None:
+        messages.error(request, "Task not found.")
+        return redirect("QuestLog:tasks")
+
+    if not file1:
+        messages.error(request, "No file uploaded.")
+        return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+    #is image file type
+    content_type = file1.content_type
+    if not (content_type in IMAGE_TYPES):
+        messages.error(request, "Unsupported format")
+        return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+    #greater than X
+    if file1.size > MAX_FILE_SIZE:
+        messages.error(request, "Image to large")
+        return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
+
+    task.proofs = file1
+    task.status = Task.Status.COMPLETED
+    task.completed_at = timezone.now()
+    task.save(update_fields=["proofs", "status", "completed_at"])
+
+    return redirect("QuestLog:tasks")
+   

@@ -5,6 +5,9 @@
   <div class="mb-4">
     <h1 class="h3 mb-1">Task Pool</h1>
     <p class="text-muted">Select a party to view its available tasks.</p>
+    {% if request.user.is_authenticated %}
+      <p class="mb-0"><a class="btn btn-outline-secondary btn-sm" href="{% url 'QuestLog:task_history' %}">Task history</a></p>
+    {% endif %}
   </div>
 
   {% if parties %}
@@ -37,14 +40,20 @@
       <h1 class="h3 mb-1">{{ party.party_name }} &mdash; Task Pool</h1>
       <p class="text-muted mb-0">Create tasks for this party and let members rate how difficult they feel each one is.</p>
     </div>
-    <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">+ Add Task</a>
+    <div class="d-flex flex-wrap gap-2 justify-content-end">
+      <a class="btn btn-primary" href="{% url 'QuestLog:create_task' %}?guid={{ party.guid }}">+ Add Task</a>
+      <a class="btn btn-info" href="{% url 'QuestLog:task_history' %}">Task history</a>
+    </div>
   </div>
 
   <h5 class="mb-3">Available Quests</h5>
   <div class="row g-3">
     {% for task in available_tasks %}
       <div class="col-md-6">
-        <div class="card h-100">
+        <div
+          class="card h-100 task-tile"
+          tabindex="0"
+        >
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
               <div>
@@ -52,6 +61,7 @@
                 <p class="card-text text-muted mb-0">{{ task.description }}</p>
               </div>
               <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/5</span>
+              <a class="btn btn-primary" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">Start Task</a>
             </div>
 
             <p class="card-text text-muted small mb-3">
@@ -106,4 +116,33 @@
     {% endfor %}
   </div>
 {% endif %}
+<!-- This is the code that enables linking onclick to /complete_task -->
+<script>
+  (function () {
+    const interactiveSelector = "a, button, input, select, textarea, label, form";
+
+    document.querySelectorAll(".task-tile").forEach((tile) => {
+      const goToTask = () => {
+        const targetUrl = tile.dataset.taskUrl;
+        if (targetUrl) {
+          window.location.href = targetUrl;
+        }
+      };
+
+      tile.addEventListener("click", (event) => {
+        if (event.target.closest(interactiveSelector)) {
+          return;
+        }
+        goToTask();
+      });
+
+      tile.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          goToTask();
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}
