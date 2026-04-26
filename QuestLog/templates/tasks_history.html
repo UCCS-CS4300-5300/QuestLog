@@ -13,7 +13,15 @@
                     <div class="card-body">
                         <h5 class="card-title">{{ task.name }}</h5>
                         <p class="card-text">{{ task.description|striptags }}</p>
+                        <p class="card-text mb-1"><strong>Difficulty:</strong> {{ task.difficulty_rating }}/10</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
+                        
+                        {% if task.recurring %}
+                        <p class="card-text mb-1"><strong>Recurring:</strong> Every {{ task.recurring }} day{{ task.recurring|pluralize }}</p>
+                        {% else %}
+                        <p class="card-text mb-1"><strong>Recurring:</strong> One-time task</p>
+                        {% endif %}
+                        
                         <p class="card-text mb-1">
                             <strong>Completed by:</strong>
                             {% if task.completed_by %}

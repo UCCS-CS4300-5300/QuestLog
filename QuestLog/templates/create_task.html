@@ -8,7 +8,7 @@
         <div>
           <h1 class="h3 mb-1">Create a task</h1>
           <div class="text-muted">
-            Add a task to a party and give it an initial difficulty rating from 1 to 5.
+            Add a task to a party and give it an initial difficulty rating from 1 to 10.
           </div>
         </div>
         {% if selected_party %}
@@ -59,13 +59,24 @@
             <div class="mb-3">
               <label for="{{ form.difficulty_rating.id_for_label }}" class="form-label">Difficulty rating</label>
               {{ form.difficulty_rating }}
-              <div class="form-text">Use 1 for easy tasks and 5 for the toughest quests.</div>
+              <div class="form-text">Use 1 for easy tasks and 10 for the toughest quests.</div>
               {% if form.difficulty_rating.errors %}
                 <div class="text-danger small mt-1">
                   {{ form.difficulty_rating.errors }}
                 </div>
               {% endif %}
             </div>
+
+              <div class="mb-3">
+                <label for="{{ form.recurring.id_for_label }}" class="form-label">Recurring interval (days)</label>
+                {{ form.recurring }}
+                <div class="form-text">Use 0 for a one-time task, or enter the number of days between repeats.</div>
+                {% if form.recurring.errors %}
+                  <div class="text-danger small mt-1">
+                    {{ form.recurring.errors }}
+                  </div>
+                {% endif %}
+              </div>
 
             <div class="d-flex gap-2">
               <button type="submit" class="btn btn-primary">Create task</button>

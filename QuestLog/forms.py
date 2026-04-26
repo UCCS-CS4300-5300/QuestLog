@@ -152,11 +152,11 @@ class InviteUserForm(forms.Form):
 class CreateTaskForm(forms.ModelForm):
     difficulty_rating = forms.IntegerField(
         min_value=1,
-        max_value=5,
+        max_value=10,
         widget=forms.NumberInput(
             attrs={
                 "min": 1,
-                "max": 5,
+                "max": 10,
                 "step": 1,
             }
         ),
@@ -164,7 +164,7 @@ class CreateTaskForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ("affiliation", "name", "description", "difficulty_rating")
+        fields = ("affiliation", "name", "description", "difficulty_rating", "recurring")
         widgets = {
             "description": forms.Textarea(
                 attrs={
@@ -175,12 +175,20 @@ class CreateTaskForm(forms.ModelForm):
             "name": forms.TextInput(
                 attrs={"placeholder": "Enter a task name"}
             ),
+            "recurring": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "step": 1,
+                    "placeholder": "0 for non-recurring, or enter the number of days",
+                }
+            )
         }
         labels = {
             "affiliation": "Party",
             "name": "Task name",
             "description": "Task description",
             "difficulty_rating": "Starting difficulty",
+            "recurring": "Recurring interval (days)",
         }
 
     def __init__(self, *args, user=None, selected_party=None, **kwargs):
@@ -199,6 +207,7 @@ class CreateTaskForm(forms.ModelForm):
         self.fields["name"].widget.attrs["class"] = "form-control"
         self.fields["description"].widget.attrs["class"] = "form-control"
         self.fields["difficulty_rating"].widget.attrs["class"] = "form-control"
+        self.fields["recurring"].widget.attrs["class"] = "form-control"
 
     def clean_affiliation(self):
         party = self.cleaned_data["affiliation"]
@@ -219,10 +228,17 @@ class CreateTaskForm(forms.ModelForm):
         if not description:
             raise forms.ValidationError("Task description cannot be blank.")
         return description
+    def clean_recurring(self):
+        recurring = self.cleaned_data["recurring"]
+
+        if recurring < 0:
+            raise forms.ValidationError("Recurring days cannot be negative.")
+        
+        return recurring
 
 
 class TaskDifficultyVoteForm(forms.Form):
-    RATING_CHOICES = [(rating, f"{rating}") for rating in range(1, 6)]
+    RATING_CHOICES = [(rating, f"{rating}") for rating in range(1, 11)]
 
     rating = forms.TypedChoiceField(
         coerce=int,

@@ -352,7 +352,7 @@ def create_task(request):
             with transaction.atomic():
                 task = form.save(commit=False)
                 task.owner = request.user
-                task.point_value = task.difficulty_rating
+                task.point_value = task.difficulty_rating * 10
                 task.save()
 
                 TaskDifficultyVote.objects.update_or_create(
@@ -387,7 +387,7 @@ def vote_task_difficulty(request, task_id):
     form = TaskDifficultyVoteForm(request.POST)
 
     if not form.is_valid():
-        messages.error(request, "Choose a difficulty rating between 1 and 5.")
+        messages.error(request, "Choose a difficulty rating between 1 and 10.")
         return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
 
     with transaction.atomic():
@@ -630,10 +630,25 @@ def upload_task_proof(request):
         messages.error(request, "Image to large")
         return redirect(f"{reverse('QuestLog:complete_task')}?task_id={task.id}")
 
-    task.proofs = file1
-    task.status = Task.Status.COMPLETED
-    task.completed_at = timezone.now()
-    task.save(update_fields=["proofs", "status", "completed_at"])
+    with transaction.atomic():
+        task.proofs = file1
+        task.status = Task.Status.COMPLETED
+        task.completed_at = timezone.now()
+        task.save(update_fields=["proofs", "status", "completed_at"])
+    default_reward, _ = Reward.objects.get_or_create(
+        class_attributes="Default Reward"
+    )
+    user_points, _ = UserPoints.objects.get_or_create(
+        user=request.user,
+        party=task.affiliation,
+        defaults={
+            "points": 0,
+            "rewards": default_reward,
+        },
+    )
+    user_points.points += task.point_value
+    user_points.save(update_fields=["points"])
 
+    return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
     return redirect("QuestLog:tasks")
    
