@@ -11,7 +11,7 @@ Feature: Smoke tests for core pages
   Scenario: About page is reachable
     When I visit the path "/about/"
     Then the response status should be 200
-    And the response should contain "Welcome to the Quest Log about page"
+    And the response should contain "About QuestLog"
 
   Scenario: Tasks page is reachable
     When I visit the path "/tasks/"
