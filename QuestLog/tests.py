@@ -13,10 +13,12 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from io import BytesIO
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
@@ -1401,6 +1403,12 @@ class RewardShopAndProfileInventoryTests(TestCase):
             ).count(),
             1,
         )
+
+    def test_get_default_reward_handles_concurrent_create_race(self):
+        with patch("QuestLog.models.Reward.objects.get_or_create", side_effect=IntegrityError):
+            reward = get_default_reward()
+
+        self.assertEqual(reward.pk, self.default_reward.pk)
 
     def test_rewards_page_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:rewards"))
