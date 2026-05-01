@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
-from .models import Party, Task, save_user_profile
+from .models import Party, Reward, Task, save_user_profile
 
 User = get_user_model()
 DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
@@ -245,3 +245,84 @@ class TaskDifficultyVoteForm(forms.Form):
         choices=RATING_CHOICES,
         widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
+
+
+class RewardForm(forms.ModelForm):
+    class Meta:
+        model = Reward
+        fields = ("name", "description", "point_cost", "reward_type", "profile_value")
+        labels = {
+            "name": "Reward name",
+            "description": "Description",
+            "point_cost": "Point cost",
+            "reward_type": "Reward type",
+            "profile_value": "Profile text",
+        }
+        widgets = {
+            "name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "Pick dinner, choose the movie, skip a chore",
+                }
+            ),
+            "description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                    "placeholder": "What does the reward unlock?",
+                }
+            ),
+            "point_cost": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": 1,
+                    "step": 1,
+                }
+            ),
+            "reward_type": forms.Select(attrs={"class": "form-select"}),
+            "profile_value": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "Quest Champion, Legendary Helper",
+                }
+            ),
+        }
+        help_texts = {
+            "profile_value": "Required for profile title and calling card rewards.",
+        }
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if not name:
+            raise forms.ValidationError("Reward name cannot be blank.")
+        return name
+
+    def clean_description(self):
+        return self.cleaned_data.get("description", "").strip()
+
+    def clean_point_cost(self):
+        point_cost = self.cleaned_data["point_cost"]
+        if point_cost < 1:
+            raise forms.ValidationError("Reward cost must be at least 1 point.")
+        return point_cost
+
+    def clean_profile_value(self):
+        return self.cleaned_data.get("profile_value", "").strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        reward_type = cleaned_data.get("reward_type")
+        profile_value = cleaned_data.get("profile_value", "")
+
+        if reward_type == Reward.RewardType.CUSTOM:
+            cleaned_data["profile_value"] = ""
+            return cleaned_data
+
+        if reward_type in {Reward.RewardType.PROFILE_TITLE, Reward.RewardType.CALLING_CARD}:
+            if not profile_value:
+                self.add_error(
+                    "profile_value",
+                    "Enter the text that should appear on the profile.",
+                )
+
+        return cleaned_data
