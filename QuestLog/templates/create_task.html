@@ -68,15 +68,30 @@
             </div>
 
               <div class="mb-3">
-                <label for="{{ form.recurring.id_for_label }}" class="form-label">Recurring interval (days)</label>
-                {{ form.recurring }}
-                <div class="form-text">Use 0 for a one-time task, or enter the number of days between repeats.</div>
-                {% if form.recurring.errors %}
-                  <div class="text-danger small mt-1">
-                    {{ form.recurring.errors }}
-                  </div>
-                {% endif %}
+              <label for="{{ form.recurring.id_for_label }}" class="form-label">Recurring interval (days)</label>
+              {{ form.recurring }}
+              <div class="form-text">Use 0 for a one-time task, or enter the number of days between repeats.</div>
+              {% if form.recurring.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.recurring.errors }}
+                </div>
+              {% endif %}
+            </div>
+            <div class="mb-3">
+              <label for="{{ form.bounty.id_for_label }}" class="form-label">Bounty (optional)</label>
+              {{ form.bounty }}
+              <div class="form-text">
+                Spend your own points to sweeten the pot for whoever dares to take this task.
+                Leave at 0 to skip.
+                <span id="bounty-balance-hint" class="fw-semibold"></span>
               </div>
+              {% if form.bounty.errors %}
+                <div class="text-danger small mt-1">
+                  {{ form.bounty.errors }}
+                </div>
+              {% endif %}
+            </div>
+
 
             <div class="d-flex gap-2">
               <button type="submit" class="btn btn-primary">Create task</button>
@@ -89,7 +104,6 @@
           </form>
         </div>
       </div>
-
       <div class="card mt-3">
         <div class="card-body">
           <div class="fw-semibold mb-2">How difficulty works</div>
@@ -100,6 +114,30 @@
           </ul>
         </div>
       </div>
+
     </div>
   </div>
+
+ {{ party_points_data|json_script:"party-points-data" }}
+  <script>
+    (function () {
+      const partyPoints =JSON.parse(document.getElementById("party-points-data").textContent);
+      const partySelect =document.getElementById("{{ form.affiliation.id_for_label }}");
+      const balanceHint =document.getElementById("bounty-balance-hint");
+
+      // update balance text when party changes
+      function updateHint() {
+        const partyId =partySelect.value;
+         //if a valid party is selected and user has points for it then show amount of points
+        if (partyId && partyPoints[partyId] !== undefined) {
+          balanceHint.textContent ="You have " + partyPoints[partyId] + " points available in this party.";
+        } else {
+          balanceHint.textContent = "";
+        }
+      }
+
+      partySelect.addEventListener("change", updateHint);
+      updateHint();
+    })();
+  </script>
 {% endblock %}

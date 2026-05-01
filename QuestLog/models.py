@@ -204,6 +204,7 @@ class Task(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(10)],
     )
     point_value = models.PositiveIntegerField(default=0)
+    bounty = models.PositiveIntegerField(default=0,help_text="Extra points funded by the task creator, paid out to whoever completes this task.",)
     proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) #pictures of completed task
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
@@ -213,7 +214,12 @@ class Task(models.Model):
 
     def __str__(self):
         return self.name
-
+    #for bountry
+    @property
+    def total_reward(self):
+        """Total points awarded on completion: base difficulty points + bounty points from fellow players!"""
+        return self.point_value +self.bounty
+        
     @property
     def difficulty_vote_count(self):
         prefetched_votes = self._prefetched_objects_cache.get("difficulty_votes") if hasattr(self, "_prefetched_objects_cache") else None

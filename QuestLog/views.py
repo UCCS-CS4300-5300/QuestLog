@@ -173,9 +173,8 @@ def complete_task(request):
     except (TypeError, ValueError):
         messages.error(request, "Task not found.")
         return redirect("QuestLog:tasks")
-
     task = (
-        Task.objects.filter(id=task_id, owner=request.user)
+        Task.objects.filter(id=task_id, affiliation__members=request.user)
         .exclude(status=Task.Status.COMPLETED)
         .first()
     )
@@ -329,7 +328,6 @@ def leaderboard(request):
 def parties(request):
     return renderPage(request, "parties.html")
 
-
 @login_required(login_url="QuestLog:login")
 def create_task(request):
     selected_party = None
@@ -362,8 +360,27 @@ def create_task(request):
                 )
                 task.sync_point_value_with_difficulty()
 
+                if task.bounty > 0:
+                    user_points = UserPoints.objects.get(
+                        user=request.user,
+                        party=task.affiliation,
+                    )
+                    user_points.points -= task.bounty
+                    user_points.save(update_fields=["points"])
+
             messages.success(request, f"{task.name} was added to {task.affiliation.party_name}.")
+            if task.bounty > 0:
+                messages.info(
+                    request,
+                    f"{task.bounty} point(s) placed as a bounty. "
+                    f"Whoever completes this task earns {task.total_reward} points total.",
+                )
             return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
+
+    party_points_data = {
+        str(up.party_id): up.points
+        for up in UserPoints.objects.filter(user=request.user)
+    }
 
     context = {
         "profile": get_user_profile(request.user),
@@ -372,10 +389,10 @@ def create_task(request):
         "pending_party_invitations": getPendingPartyInvitations(request.user),
         "form": form,
         "selected_party": selected_party,
+        "party_points_data": party_points_data,
     }
     return render(request, "create_task.html", context)
-
-
+    
 @login_required(login_url="QuestLog:login")
 @require_POST
 def vote_task_difficulty(request, task_id):
@@ -465,7 +482,6 @@ def party_details(request):
         ),
     }
     return render(request, "party_details.html", context)
-
 
 @login_required(login_url="QuestLog:login")
 def create_party(request):
@@ -605,8 +621,10 @@ def upload_task_proof(request):
 
     file1 = request.FILES.get("proof_file")
     task_id = request.POST.get("task_id")
+    #any party member can submit proof not just task creator
+    # really important for bounties to work properlyand so someone else can claim a bounty task aswell
     task = (
-        Task.objects.filter(id=task_id, owner=request.user)
+        Task.objects.filter(id=task_id, affiliation__members=request.user)
         .exclude(status=Task.Status.COMPLETED)
         .first()
     )
@@ -646,7 +664,7 @@ def upload_task_proof(request):
             "rewards": default_reward,
         },
     )
-    user_points.points += task.point_value
+    user_points.points += task.total_reward
     user_points.save(update_fields=["points"])
 
     return redirect(f"{reverse('QuestLog:tasks')}?guid={task.affiliation.guid}")
