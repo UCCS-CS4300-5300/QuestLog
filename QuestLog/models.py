@@ -10,7 +10,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 
 from QuestLog.utilities import (
     scan_for_malicious_code,
@@ -257,6 +257,20 @@ class Reward(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
+    class Meta:
+        """Reward constraints."""
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["class_attributes"],
+                condition=models.Q(
+                    class_attributes="Default Reward",
+                    party__isnull=True,
+                ),
+                name="unique_default_reward_placeholder",
+            )
+        ]
+
     @property
     def label(self):
         """Return the display label for the reward."""
@@ -306,23 +320,19 @@ class Reward(models.Model):
 def get_default_reward():
     """Return the default reward placeholder."""
 
-    reward = (
-        Reward.objects
-        .filter(class_attributes="Default Reward", party__isnull=True)
-        .order_by("id")
-        .first()
-    )
-    if reward is None:
-        reward = Reward.objects.create(
+    with transaction.atomic():
+        reward, _created = Reward.objects.get_or_create(
             class_attributes="Default Reward",
             party=None,
-            name="Default Reward",
-            description="Tracks party membership before a reward is purchased.",
-            point_cost=0,
+            defaults={
+                "name": "Default Reward",
+                "description": "Tracks party membership before a reward is purchased.",
+                "point_cost": 0,
+            },
         )
-    elif not reward.name:
-        reward.name = "Default Reward"
-        reward.save(update_fields=["name"])
+        if not reward.name:
+            reward.name = "Default Reward"
+            reward.save(update_fields=["name"])
 
     return reward
 

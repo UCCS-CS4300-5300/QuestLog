@@ -1,6 +1,6 @@
 """Add reward shop inventory and profile customization fields."""
 
-# pylint: disable=invalid-name,protected-access
+# pylint: disable=invalid-name,protected-access,unused-argument
 
 import django.db.models.deletion
 from django.conf import settings
@@ -29,6 +29,9 @@ class AddFieldIfMissing(migrations.AddField):
 
         super().database_forwards(app_label, schema_editor, from_state, to_state)
 
+    def database_backwards(self, app_label, schema_editor, from_state, to_state):
+        """Avoid deleting columns that may have existed before this migration."""
+
 
 class CreateModelIfMissing(migrations.CreateModel):
     """Create a table only when it is missing."""
@@ -41,6 +44,9 @@ class CreateModelIfMissing(migrations.CreateModel):
             return
 
         super().database_forwards(app_label, schema_editor, from_state, to_state)
+
+    def database_backwards(self, app_label, schema_editor, from_state, to_state):
+        """Avoid deleting tables that may have existed before this migration."""
 
 
 class Migration(migrations.Migration):

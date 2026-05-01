@@ -31,6 +31,7 @@ from .models import (
     TaskDifficultyVote,
     UserPoints,
     UserProfile,
+    get_default_reward,
     get_user_profile,
     profile_picture_upload_to,
 )
@@ -1002,7 +1003,7 @@ class LeaderboardViewTests(TestCase):
         from django.contrib.auth import get_user_model
         from django.db import IntegrityError
 
-        from .models import Party, Reward, UserPoints, get_user_profile
+        from .models import Party, UserPoints, get_user_profile
 
         self.IntegrityError = IntegrityError
         User = get_user_model()
@@ -1047,7 +1048,7 @@ class LeaderboardViewTests(TestCase):
         self.party1.members.add(self.user1, self.user2)
         self.party2.members.add(self.user1, self.user3)
 
-        self.reward = Reward.objects.create(class_attributes="Default Reward")
+        self.reward = get_default_reward()
 
         self.user1_red_points = UserPoints.objects.create(
             user=self.user1,
@@ -1365,7 +1366,7 @@ class RewardShopAndProfileInventoryTests(TestCase):
             creator=self.creator,
         )
         self.party.members.add(self.user, self.creator)
-        self.default_reward = Reward.objects.create(class_attributes="Default Reward")
+        self.default_reward = get_default_reward()
 
     def make_task_proof(self, filename="proof.gif"):
         return SimpleUploadedFile(
@@ -1386,6 +1387,20 @@ class RewardShopAndProfileInventoryTests(TestCase):
         }
         defaults.update(overrides)
         return Task.objects.create(**defaults)
+
+    def test_get_default_reward_reuses_single_placeholder(self):
+        first_reward = get_default_reward()
+        second_reward = get_default_reward()
+
+        self.assertEqual(first_reward.pk, self.default_reward.pk)
+        self.assertEqual(second_reward.pk, first_reward.pk)
+        self.assertEqual(
+            Reward.objects.filter(
+                class_attributes="Default Reward",
+                party__isnull=True,
+            ).count(),
+            1,
+        )
 
     def test_rewards_page_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:rewards"))
@@ -1614,7 +1629,7 @@ class PartyInvitationWorkflowTests(TestCase):
         get_user_profile(self.other_user)
 
         # reward used for userpoints creation
-        self.reward = Reward.objects.create(class_attributes="Default Reward")
+        self.reward = get_default_reward()
 
     def test_create_party_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:create_party"))
