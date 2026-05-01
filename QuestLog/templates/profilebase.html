@@ -17,8 +17,12 @@
 
         <h1 class="h3" >{{ profile.display_name|default:request.user.username }}</h1>
 
+        {% if profile.profile_title %}
+            <div class="badge text-bg-primary mb-2">{{ profile.profile_title }}</div>
+        {% endif %}
+
         <p class="text-muted mb-4">
-            Quest Log profile
+            {{ profile.calling_card|default:"Quest Log profile" }}
         </p>
 
         <div class="text-start mb-4" >
@@ -36,15 +40,30 @@
                 <strong>Email:</strong> {{ request.user.email|default:"Not provided" }}
             </p>
 
+            <p>
+                <strong>Title:</strong> {{ profile.profile_title|default:"None equipped" }}
+            </p>
+
+            <p>
+                <strong>Calling Card:</strong> {{ profile.calling_card|default:"None equipped" }}
+            </p>
+
         </div>
-        <!-- bagdes-->
         <div class="text-start">
 
             <h5>Badges</h5>
 
-            <p class="text-muted mb-0">
-                No badges earned yet.
-            </p>
+            {% if profile.display_badges %}
+                <div class="d-flex flex-wrap gap-2">
+                    {% for badge in profile.display_badges %}
+                        <span class="badge text-bg-success">{{ badge.name }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">
+                    No badges displayed yet.
+                </p>
+            {% endif %}
         </div>
 
         <!-- party invitations -->

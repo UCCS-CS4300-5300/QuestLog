@@ -13,8 +13,8 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
-from .forms import CreateTaskForm, QuestLogUserCreationForm
-from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
+from .forms import CreateTaskForm, QuestLogUserCreationForm, RewardForm
+from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
 from .urls import urlpatterns
 
 import json
@@ -33,6 +33,7 @@ EXPECTED_VIEW_GET_STATUSES = {
     'parties': 302,
     'party_details': 302,
     'leaderboard': 302,
+    'rewards': 302,
     'upload_task_proof': 405,
     'create_party': 302,
 }
@@ -56,7 +57,7 @@ class ViewReachabilityTests(TestCase):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
         
         # routes with required path parameters are tested separately
-        ignored_names = { "accept_party_invitation", "decline_party_invitation", "vote_task_difficulty" }
+        ignored_names = { "accept_party_invitation", "decline_party_invitation", "purchase_reward", "vote_task_difficulty" }
         
         self.assertEqual(discovered_names - ignored_names, set(EXPECTED_VIEW_GET_STATUSES))
 
@@ -1308,6 +1309,244 @@ class TaskWorkflowTests(TestCase):
             ).exists()
         )
 
+
+class RewardShopAndProfileInventoryTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="rewardhero",
+            email="rewardhero@example.com",
+            password="test-password",
+        )
+        self.creator = User.objects.create_user(
+            username="rewardcreator",
+            email="rewardcreator@example.com",
+            password="test-password",
+        )
+        get_user_profile(self.user)
+        get_user_profile(self.creator)
+
+        self.party = Party.objects.create(
+            party_name="Reward Party",
+            creator=self.creator,
+        )
+        self.party.members.add(self.user, self.creator)
+        self.default_reward = Reward.objects.create(class_attributes="Default Reward")
+
+    def make_task_proof(self, filename="proof.gif"):
+        return SimpleUploadedFile(
+            filename,
+            AuthenticationFlowTests.TEST_IMAGE_BYTES,
+            content_type="image/gif",
+        )
+
+    def create_task_for_user(self, **overrides):
+        defaults = {
+            "owner": self.user,
+            "affiliation": self.party,
+            "name": "Finish the dishes",
+            "description": "Proof-based contribution.",
+            "difficulty_rating": 8,
+            "point_value": 80,
+            "recurring": 0,
+        }
+        defaults.update(overrides)
+        return Task.objects.create(**defaults)
+
+    def test_rewards_page_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:rewards"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_task_completion_points_can_purchase_reward(self):
+        task = self.create_task_for_user()
+        reward = Reward.objects.create(
+            party=self.party,
+            name="Pick dinner",
+            class_attributes="Pick dinner",
+            description="Choose the next shared meal.",
+            point_cost=60,
+            created_by=self.creator,
+        )
+
+        self.client.force_login(self.user)
+        upload_response = self.client.post(
+            reverse("QuestLog:upload_task_proof"),
+            {
+                "task_id": task.id,
+                "proof_file": self.make_task_proof(),
+            },
+        )
+        purchase_response = self.client.post(
+            reverse("QuestLog:purchase_reward", args=[reward.id]),
+            {"guid": str(self.party.guid)},
+        )
+
+        user_points = UserPoints.objects.get(user=self.user, party=self.party)
+
+        self.assertRedirects(upload_response, reverse("QuestLog:tasks") + f"?guid={self.party.guid}")
+        self.assertRedirects(purchase_response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertEqual(user_points.points, 80)
+        self.assertEqual(user_points.spent_points, 60)
+        self.assertEqual(user_points.available_points, 20)
+        self.assertEqual(user_points.rewards, reward)
+        self.assertTrue(
+            RewardPurchase.objects.filter(
+                user=self.user,
+                party=self.party,
+                reward=reward,
+                points_spent=60,
+            ).exists()
+        )
+
+    def test_purchase_requires_enough_available_points(self):
+        reward = Reward.objects.create(
+            party=self.party,
+            name="Choose movie night",
+            class_attributes="Choose movie night",
+            point_cost=100,
+            created_by=self.creator,
+        )
+        UserPoints.objects.create(
+            user=self.user,
+            party=self.party,
+            points=50,
+            rewards=self.default_reward,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("QuestLog:purchase_reward", args=[reward.id]),
+            {"guid": str(self.party.guid)},
+        )
+
+        user_points = UserPoints.objects.get(user=self.user, party=self.party)
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertEqual(user_points.spent_points, 0)
+        self.assertFalse(
+            RewardPurchase.objects.filter(user=self.user, reward=reward).exists()
+        )
+
+    def test_party_creator_can_add_reward_to_shop(self):
+        self.client.force_login(self.creator)
+        response = self.client.post(
+            reverse("QuestLog:rewards") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "name": "Skip dish duty",
+                "description": "Redeem for one agreed chore pass.",
+                "point_cost": 80,
+                "reward_type": Reward.RewardType.CUSTOM,
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertTrue(
+            Reward.objects.filter(
+                party=self.party,
+                name="Skip dish duty",
+                point_cost=80,
+                created_by=self.creator,
+            ).exists()
+        )
+
+    def test_profile_rewards_can_be_equipped_after_purchase(self):
+        title_reward = Reward.objects.create(
+            party=self.party,
+            name="Title: Helpful Hero",
+            class_attributes="Title: Helpful Hero",
+            point_cost=30,
+            reward_type=Reward.RewardType.PROFILE_TITLE,
+            profile_value="Helpful Hero",
+            created_by=self.creator,
+        )
+        card_reward = Reward.objects.create(
+            party=self.party,
+            name="Calling Card: Chore Crusher",
+            class_attributes="Calling Card: Chore Crusher",
+            point_cost=30,
+            reward_type=Reward.RewardType.CALLING_CARD,
+            profile_value="Chore Crusher",
+            created_by=self.creator,
+        )
+        RewardPurchase.objects.create(
+            user=self.user,
+            party=self.party,
+            reward=title_reward,
+            points_spent=30,
+        )
+        RewardPurchase.objects.create(
+            user=self.user,
+            party=self.party,
+            reward=card_reward,
+            points_spent=30,
+        )
+        for index in range(5):
+            self.create_task_for_user(
+                name=f"Completed task {index}",
+                status=Task.Status.COMPLETED,
+            )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({
+                "display_name": "Badge Hero",
+                "email": "badgehero@example.com",
+                "profile_title": "Helpful Hero",
+                "calling_card": "Chore Crusher",
+                "selected_badges": ["first_quest", "helping_hand"],
+            }),
+            content_type="application/json",
+        )
+
+        profile = get_user_profile(self.user)
+        profile.refresh_from_db()
+        self.user.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(profile.display_name, "Badge Hero")
+        self.assertEqual(self.user.email, "badgehero@example.com")
+        self.assertEqual(profile.profile_title, "Helpful Hero")
+        self.assertEqual(profile.calling_card, "Chore Crusher")
+        self.assertEqual(profile.selected_badges, ["first_quest", "helping_hand"])
+
+    def test_profile_rejects_unearned_rewards_and_badges(self):
+        self.create_task_for_user(status=Task.Status.COMPLETED)
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({
+                "profile_title": "Not Redeemed",
+                "selected_badges": ["guild_legend"],
+            }),
+            content_type="application/json",
+        )
+
+        profile = get_user_profile(self.user)
+        profile.refresh_from_db()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(profile.profile_title, "")
+        self.assertEqual(profile.selected_badges, [])
+
+    def test_reward_form_requires_profile_text_for_profile_rewards(self):
+        form = RewardForm(
+            data={
+                "name": "Title: Mystery",
+                "description": "A profile title without text should not save.",
+                "point_cost": 30,
+                "reward_type": Reward.RewardType.PROFILE_TITLE,
+                "profile_value": "",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("profile_value", form.errors)
+
+
 class PartyInvitationWorkflowTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -1909,4 +2148,3 @@ class TaskDifficultyAndRecurringTests(TestCase):
     #     self.assertEqual(response.status_code, 200)
     #     self.assertTemplateUsed(response, "party_details.html")
     #     self.assertEqual(response.context.get("party"), self.party)
-

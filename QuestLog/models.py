@@ -10,6 +10,34 @@ from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avata
 
 from collections import defaultdict
 
+MAX_DISPLAY_BADGES = 3
+BADGE_CATALOG = [
+    {
+        "code": "first_quest",
+        "name": "First Quest",
+        "description": "Complete your first quest.",
+        "task_goal": 1,
+    },
+    {
+        "code": "helping_hand",
+        "name": "Helping Hand",
+        "description": "Complete 5 quests.",
+        "task_goal": 5,
+    },
+    {
+        "code": "quest_streak",
+        "name": "Quest Streak",
+        "description": "Complete 10 quests.",
+        "task_goal": 10,
+    },
+    {
+        "code": "guild_legend",
+        "name": "Guild Legend",
+        "description": "Complete 25 quests.",
+        "task_goal": 25,
+    },
+]
+
 def profile_picture_upload_to(instance, filename):
     extension = Path(filename).suffix.lower()
     return f"profile_pictures/{uuid4().hex}{extension}"
@@ -26,9 +54,16 @@ class UserProfile(models.Model):
         upload_to=profile_picture_upload_to,
         blank=True,
     )
+    profile_title = models.CharField(max_length=80, blank=True, default="")
+    calling_card = models.CharField(max_length=120, blank=True, default="")
+    selected_badges = models.JSONField(blank=True, default=list)
 
     def __str__(self):
         return self.display_name or self.user.get_username()
+
+    @property
+    def display_badges(self):
+        return get_selected_badges(self)
 
 
 def get_user_profile(user):
@@ -57,6 +92,34 @@ def save_user_profile(user, display_name=None, profile_picture=None):
 def get_user_display_name(user):
     return get_user_profile(user).display_name or user.get_username()
 
+
+def get_completed_task_count(user):
+    return Task.objects.filter(owner=user, status=Task.Status.COMPLETED).count()
+
+
+def get_earned_badges(user):
+    completed_task_count = get_completed_task_count(user)
+    return [
+        badge
+        for badge in BADGE_CATALOG
+        if completed_task_count >= badge["task_goal"]
+    ]
+
+
+def get_selected_badges(profile, earned_badges=None):
+    earned_badges = earned_badges if earned_badges is not None else get_earned_badges(profile.user)
+    earned_by_code = {badge["code"]: badge for badge in earned_badges}
+    selected_codes = profile.selected_badges if isinstance(profile.selected_badges, list) else []
+    selected_badges = []
+
+    for code in selected_codes:
+        if code in earned_by_code:
+            selected_badges.append(earned_by_code[code])
+        if len(selected_badges) >= MAX_DISPLAY_BADGES:
+            break
+
+    return selected_badges
+
 #gen leaderboard
 def genLeaderboard(user):
     user_parties = list(user.parties.all().order_by("party_name"))
@@ -64,7 +127,7 @@ def genLeaderboard(user):
     points_rows = (
         UserPoints.objects
         .filter(party__in=user_parties)
-        .select_related("user", "party", "user__profile")
+        .select_related("user", "party", "rewards", "user__profile")
         .order_by("party__party_name", "-points", "user__username")
     )
 
@@ -123,7 +186,96 @@ def getPendingPartyInvitations(user):
     )
 
 class Reward(models.Model):
+    class RewardType(models.TextChoices):
+        CUSTOM = "custom", "Custom reward"
+        PROFILE_TITLE = "profile_title", "Profile title"
+        CALLING_CARD = "calling_card", "Calling card"
+
     class_attributes = models.CharField(default="To be determined",max_length=100)
+    party = models.ForeignKey(
+        "Party",
+        on_delete=models.CASCADE,
+        related_name="reward_catalog",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=120, blank=True)
+    description = models.TextField(max_length=300, blank=True)
+    point_cost = models.PositiveIntegerField(default=0)
+    reward_type = models.CharField(
+        max_length=20,
+        choices=RewardType.choices,
+        default=RewardType.CUSTOM,
+    )
+    profile_value = models.CharField(max_length=120, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_rewards",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    @property
+    def label(self):
+        return self.name or self.class_attributes
+
+    @property
+    def profile_reward_value(self):
+        return (self.profile_value or self.label).strip()
+
+    @property
+    def updates_profile(self):
+        return self.reward_type in {
+            self.RewardType.PROFILE_TITLE,
+            self.RewardType.CALLING_CARD,
+        }
+
+    def apply_to_profile(self, user):
+        if not self.updates_profile:
+            return False
+
+        profile = get_user_profile(user)
+        value = self.profile_reward_value
+
+        if self.reward_type == self.RewardType.PROFILE_TITLE:
+            profile.profile_title = value
+            profile.save(update_fields=["profile_title"])
+            return True
+
+        if self.reward_type == self.RewardType.CALLING_CARD:
+            profile.calling_card = value
+            profile.save(update_fields=["calling_card"])
+            return True
+
+        return False
+
+    def __str__(self):
+        return self.label
+
+
+def get_default_reward():
+    reward = (
+        Reward.objects
+        .filter(class_attributes="Default Reward", party__isnull=True)
+        .order_by("id")
+        .first()
+    )
+    if reward is None:
+        reward = Reward.objects.create(
+            class_attributes="Default Reward",
+            party=None,
+            name="Default Reward",
+            description="Tracks party membership before a reward is purchased.",
+            point_cost=0,
+        )
+    elif not reward.name:
+        reward.name = "Default Reward"
+        reward.save(update_fields=["name"])
+
+    return reward
 
 class PartySecret(models.Model):
     _secret_hash = models.CharField(max_length=128, editable=False)
@@ -173,6 +325,7 @@ class UserPoints(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     party = models.ForeignKey(Party, on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
+    spent_points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward, on_delete=models.PROTECT)
     avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file])
 
@@ -183,6 +336,31 @@ class UserPoints(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.party.party_name}: {self.points}"
 
+    @property
+    def available_points(self):
+        return max(self.points - self.spent_points, 0)
+
+
+class RewardPurchase(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reward_purchases",
+    )
+    party = models.ForeignKey(
+        Party,
+        on_delete=models.CASCADE,
+        related_name="reward_purchases",
+    )
+    reward = models.ForeignKey(Reward, on_delete=models.PROTECT, related_name="purchases")
+    points_spent = models.PositiveIntegerField()
+    purchased_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-purchased_at"]
+
+    def __str__(self):
+        return f"{self.user.username} bought {self.reward.label} in {self.party.party_name}"
 
 
 class Task(models.Model):

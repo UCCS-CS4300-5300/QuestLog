@@ -21,10 +21,16 @@
                   {{ entry.standings|length }} member{{ entry.standings|length|pluralize }}
                 </div>
               </div>
-              <a class="btn btn-sm btn-outline-secondary"
-                 href="{% url 'QuestLog:party_details' %}?guid={{ entry.party.guid }}">
-                View party
-              </a>
+              <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{% url 'QuestLog:party_details' %}?guid={{ entry.party.guid }}">
+                  View party
+                </a>
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{% url 'QuestLog:rewards' %}?guid={{ entry.party.guid }}">
+                  Rewards
+                </a>
+              </div>
             </div>
 
             <div class="card-body">
@@ -43,13 +49,18 @@
                         <tr>
                           <td class="fw-semibold">{{ forloop.counter }}</td>
                           <td>
-                            {% if score.user.profile.display_name %}
-                              {{ score.user.profile.display_name }}
-                            {% else %}
-                              {{ score.user.username }}
-                            {% endif %}
-                            {% if request.user.is_authenticated and score.user.pk == request.user.pk %}
-                              <span class="badge text-bg-primary ms-2">You</span>
+                            <div>
+                              {% if score.user.profile.display_name %}
+                                {{ score.user.profile.display_name }}
+                              {% else %}
+                                {{ score.user.username }}
+                              {% endif %}
+                              {% if request.user.is_authenticated and score.user.pk == request.user.pk %}
+                                <span class="badge text-bg-primary ms-2">You</span>
+                              {% endif %}
+                            </div>
+                            {% if score.user.profile.profile_title %}
+                              <div class="small text-muted">{{ score.user.profile.profile_title }}</div>
                             {% endif %}
                           </td>
                           <td class="text-end">{{ score.points }}</td>
