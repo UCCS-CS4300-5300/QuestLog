@@ -1,4 +1,12 @@
+"""Tests for the Quest Log app."""
+
+# pylint: disable=missing-class-docstring,missing-function-docstring,no-member
+# pylint: disable=protected-access,too-many-arguments,too-many-instance-attributes
+# pylint: disable=too-many-lines,too-many-positional-arguments,too-many-public-methods
+# pylint: disable=import-outside-toplevel,invalid-name,redefined-outer-name,reimported
+
 import importlib
+import json
 import os
 import shutil
 import sys
@@ -14,10 +22,19 @@ from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
 from .forms import CreateTaskForm, QuestLogUserCreationForm, RewardForm
-from .models import Party, PartyInvitation, Reward, RewardPurchase, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
+from .models import (
+    Party,
+    PartyInvitation,
+    Reward,
+    RewardPurchase,
+    Task,
+    TaskDifficultyVote,
+    UserPoints,
+    UserProfile,
+    get_user_profile,
+    profile_picture_upload_to,
+)
 from .urls import urlpatterns
-
-import json
 
 EXPECTED_VIEW_GET_STATUSES = {
     "home": 200,
@@ -55,10 +72,15 @@ class ViewReachabilityTests(TestCase):
 
     def test_all_named_urls_are_accounted_for(self):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
-        
+
         # routes with required path parameters are tested separately
-        ignored_names = { "accept_party_invitation", "decline_party_invitation", "purchase_reward", "vote_task_difficulty" }
-        
+        ignored_names = {
+            "accept_party_invitation",
+            "decline_party_invitation",
+            "purchase_reward",
+            "vote_task_difficulty",
+        }
+
         self.assertEqual(discovered_names - ignored_names, set(EXPECTED_VIEW_GET_STATUSES))
 
     def test_all_named_urls_return_expected_status_codes(self):
@@ -237,7 +259,11 @@ class UserProfileTests(TestCase):
     def test_profile_post_all_entries(self):
         user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
         self.client.force_login(user)
-        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname", "email": "test3@example.com", }), content_type="application/json")
+        resp = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({"display_name": "testname", "email": "test3@example.com"}),
+            content_type="application/json",
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(get_user_profile(user).display_name, "testname")
         user = get_user_model().objects.get(pk=user.pk)
@@ -246,14 +272,22 @@ class UserProfileTests(TestCase):
     def test_profile_post_partial_entries(self):
         user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
         self.client.force_login(user)
-        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname"}), content_type="application/json")
+        resp = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({"display_name": "testname"}),
+            content_type="application/json",
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(get_user_profile(user).display_name, "testname")
 
     def test_profile_post_bad(self):
         user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
         self.client.force_login(user)
-        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"ghjghkjghj": "testname"}), content_type="application/json")
+        resp = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({"ghjghkjghj": "testname"}),
+            content_type="application/json",
+        )
         self.assertEqual(resp.status_code, 400)
 
 
@@ -1135,7 +1169,7 @@ class LeaderboardViewTests(TestCase):
                 points=999,
                 rewards=self.reward,
             )
-    
+
     def test_anonymous_user_does_not_see_leaderboard_link(self):
         response = self.client.get(reverse("QuestLog:home"))
 
@@ -1385,8 +1419,14 @@ class RewardShopAndProfileInventoryTests(TestCase):
 
         user_points = UserPoints.objects.get(user=self.user, party=self.party)
 
-        self.assertRedirects(upload_response, reverse("QuestLog:tasks") + f"?guid={self.party.guid}")
-        self.assertRedirects(purchase_response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertRedirects(
+            upload_response,
+            reverse("QuestLog:tasks") + f"?guid={self.party.guid}",
+        )
+        self.assertRedirects(
+            purchase_response,
+            reverse("QuestLog:rewards") + f"?guid={self.party.guid}",
+        )
         self.assertEqual(user_points.points, 80)
         self.assertEqual(user_points.spent_points, 60)
         self.assertEqual(user_points.available_points, 20)

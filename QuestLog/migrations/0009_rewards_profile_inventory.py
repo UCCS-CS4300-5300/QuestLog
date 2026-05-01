@@ -1,9 +1,15 @@
+"""Add reward shop inventory and profile customization fields."""
+
+# pylint: disable=invalid-name,protected-access
+
 import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
 
 class AddFieldIfMissing(migrations.AddField):
+    """Add a field only when its database column is missing."""
+
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
         to_model = to_state.apps.get_model(app_label, self.model_name)
         field = to_model._meta.get_field(self.name)
@@ -25,6 +31,8 @@ class AddFieldIfMissing(migrations.AddField):
 
 
 class CreateModelIfMissing(migrations.CreateModel):
+    """Create a table only when it is missing."""
+
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
         model = to_state.apps.get_model(app_label, self.name)
         table_names = schema_editor.connection.introspection.table_names()
@@ -36,6 +44,7 @@ class CreateModelIfMissing(migrations.CreateModel):
 
 
 class Migration(migrations.Migration):
+    """Migration for reward purchases and profile flair."""
 
     dependencies = [
         ("QuestLog", "0008_alter_task_difficulty_rating_and_more"),

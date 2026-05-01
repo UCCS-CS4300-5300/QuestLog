@@ -1,3 +1,7 @@
+"""Forms for Quest Log account, party, task, and reward flows."""
+
+# pylint: disable=no-member,too-few-public-methods,too-many-ancestors
+
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -11,6 +15,8 @@ DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS = frozenset({"GIF", "JPEG", "PNG", "WEBP
 
 
 def get_max_profile_picture_size():
+    """Return the configured profile picture size limit."""
+
     configured_size = getattr(
         settings,
         "MAX_PROFILE_PICTURE_SIZE",
@@ -22,6 +28,8 @@ def get_max_profile_picture_size():
 
 
 def get_allowed_profile_picture_formats():
+    """Return allowed profile picture image formats."""
+
     configured_formats = getattr(
         settings,
         "ALLOWED_PROFILE_PICTURE_FORMATS",
@@ -37,10 +45,14 @@ def get_allowed_profile_picture_formats():
 
 
 class QuestLogUserCreationForm(UserCreationForm):
+    """Registration form that also creates a user profile."""
+
     display_name = forms.CharField(max_length=150)
     profile_picture = forms.ImageField(required=False)
 
     class Meta(UserCreationForm.Meta):
+        """Fields for registration."""
+
         model = User
         fields = ("display_name", "username", "email", "profile_picture")
 
@@ -58,6 +70,8 @@ class QuestLogUserCreationForm(UserCreationForm):
         )
 
     def save(self, commit=True):
+        """Save the user and profile."""
+
         user = super().save(commit=False)
 
         if commit:
@@ -67,6 +81,8 @@ class QuestLogUserCreationForm(UserCreationForm):
         return user
 
     def save_profile(self, user):
+        """Save the profile fields for a new user."""
+
         return save_user_profile(
             user,
             display_name=self.cleaned_data["display_name"],
@@ -74,6 +90,8 @@ class QuestLogUserCreationForm(UserCreationForm):
         )
 
     def clean_profile_picture(self):
+        """Validate uploaded profile pictures."""
+
         profile_picture = self.cleaned_data.get("profile_picture")
         if not profile_picture:
             return profile_picture
@@ -90,6 +108,8 @@ class QuestLogUserCreationForm(UserCreationForm):
 
 
 class QuestLogAuthenticationForm(AuthenticationForm):
+    """Login form with Quest Log placeholders."""
+
     username = forms.CharField(
         label="Username",
         widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Enter your username"}),
@@ -101,6 +121,8 @@ class QuestLogAuthenticationForm(AuthenticationForm):
     )
 
 class CreatePartyForm(forms.Form):
+    """Form for creating a party and optional first invite."""
+
     party_name = forms.CharField(
         max_length=200,
         widget=forms.TextInput(attrs={"placeholder": "Enter a party name"}),
@@ -112,6 +134,8 @@ class CreatePartyForm(forms.Form):
     )
 
     def clean_party_name(self):
+        """Reject blank party names."""
+
         party_name = self.cleaned_data["party_name"].strip()
         if not party_name:
             raise forms.ValidationError("Party name cannot be blank.")
@@ -119,6 +143,8 @@ class CreatePartyForm(forms.Form):
 
 
 class InviteUserForm(forms.Form):
+    """Form for inviting an existing user to a party."""
+
     username = forms.CharField(
         max_length=150,
         widget=forms.TextInput(attrs={"placeholder": "Enter a username to invite"}),
@@ -131,12 +157,14 @@ class InviteUserForm(forms.Form):
         self.invited_user = None
 
     def clean_username(self):
+        """Resolve and validate the invited username."""
+
         username = self.cleaned_data["username"].strip()
 
         try:
             invited_user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            raise forms.ValidationError("No user with that username exists.")
+        except User.DoesNotExist as exc:
+            raise forms.ValidationError("No user with that username exists.") from exc
 
         if self.party and self.party.members.filter(pk=invited_user.pk).exists():
             raise forms.ValidationError("That user is already a member of this party.")
@@ -150,6 +178,8 @@ class InviteUserForm(forms.Form):
 
 
 class CreateTaskForm(forms.ModelForm):
+    """Form for creating party tasks."""
+
     difficulty_rating = forms.IntegerField(
         min_value=1,
         max_value=10,
@@ -163,6 +193,8 @@ class CreateTaskForm(forms.ModelForm):
     )
 
     class Meta:
+        """Fields for task creation."""
+
         model = Task
         fields = ("affiliation", "name", "description", "difficulty_rating", "recurring")
         widgets = {
@@ -210,6 +242,8 @@ class CreateTaskForm(forms.ModelForm):
         self.fields["recurring"].widget.attrs["class"] = "form-control"
 
     def clean_affiliation(self):
+        """Ensure tasks are only created in the user's parties."""
+
         party = self.cleaned_data["affiliation"]
 
         if self.user is None or not self.user.parties.filter(pk=party.pk).exists():
@@ -218,26 +252,34 @@ class CreateTaskForm(forms.ModelForm):
         return party
 
     def clean_name(self):
+        """Reject blank task names."""
+
         name = self.cleaned_data["name"].strip()
         if not name:
             raise forms.ValidationError("Task name cannot be blank.")
         return name
 
     def clean_description(self):
+        """Reject blank task descriptions."""
+
         description = self.cleaned_data["description"].strip()
         if not description:
             raise forms.ValidationError("Task description cannot be blank.")
         return description
     def clean_recurring(self):
+        """Reject negative recurrence intervals."""
+
         recurring = self.cleaned_data["recurring"]
 
         if recurring < 0:
             raise forms.ValidationError("Recurring days cannot be negative.")
-        
+
         return recurring
 
 
 class TaskDifficultyVoteForm(forms.Form):
+    """Form for voting on task difficulty."""
+
     RATING_CHOICES = [(rating, f"{rating}") for rating in range(1, 11)]
 
     rating = forms.TypedChoiceField(
@@ -248,7 +290,11 @@ class TaskDifficultyVoteForm(forms.Form):
 
 
 class RewardForm(forms.ModelForm):
+    """Form for party reward catalog entries."""
+
     class Meta:
+        """Fields for reward creation."""
+
         model = Reward
         fields = ("name", "description", "point_cost", "reward_type", "profile_value")
         labels = {
@@ -292,24 +338,34 @@ class RewardForm(forms.ModelForm):
         }
 
     def clean_name(self):
+        """Reject blank reward names."""
+
         name = self.cleaned_data["name"].strip()
         if not name:
             raise forms.ValidationError("Reward name cannot be blank.")
         return name
 
     def clean_description(self):
+        """Normalize reward descriptions."""
+
         return self.cleaned_data.get("description", "").strip()
 
     def clean_point_cost(self):
+        """Require a positive reward cost."""
+
         point_cost = self.cleaned_data["point_cost"]
         if point_cost < 1:
             raise forms.ValidationError("Reward cost must be at least 1 point.")
         return point_cost
 
     def clean_profile_value(self):
+        """Normalize profile reward text."""
+
         return self.cleaned_data.get("profile_value", "").strip()
 
     def clean(self):
+        """Require profile text for profile rewards."""
+
         cleaned_data = super().clean()
         reward_type = cleaned_data.get("reward_type")
         profile_value = cleaned_data.get("profile_value", "")
