@@ -18,7 +18,7 @@ from django.views.decorators.http import require_POST
 from .forms import CreatePartyForm, CreateTaskForm, InviteUserForm, QuestLogAuthenticationForm, QuestLogUserCreationForm, TaskDifficultyVoteForm
 from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_display_name, get_user_profile, genLeaderboard, getParties, getPartyDetails, getPartyMembers, getPartyTasks, getPendingPartyInvitations
 from .serializers import updateUser, updateProfile
-
+#unused for now
 from PIL import Image
 
 User = get_user_model()
@@ -258,7 +258,6 @@ def serve_media(request, path):
         )
         if task_with_proof is None:
             raise Http404("Media file not found.")
-
         can_access_proof = task_with_proof.owner_id == request.user.id
         if not can_access_proof:
             can_access_proof = task_with_proof.affiliation.members.filter(
@@ -392,7 +391,7 @@ def create_task(request):
         "party_points_data": party_points_data,
     }
     return render(request, "create_task.html", context)
-    
+
 @login_required(login_url="QuestLog:login")
 @require_POST
 def vote_task_difficulty(request, task_id):
@@ -501,7 +500,6 @@ def create_party(request):
             # creator should automatically be added to their own party
             party.members.add(request.user)
 
-            # creator should have a userpoints row for this party
             default_reward, _ = Reward.objects.get_or_create(
                 class_attributes="Default Reward"
             )
