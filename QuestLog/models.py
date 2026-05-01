@@ -10,7 +10,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 
 from QuestLog.utilities import (
     scan_for_malicious_code,
@@ -320,19 +320,27 @@ class Reward(models.Model):
 def get_default_reward():
     """Return the default reward placeholder."""
 
-    with transaction.atomic():
-        reward, _created = Reward.objects.get_or_create(
+    defaults = {
+        "name": "Default Reward",
+        "description": "Tracks party membership before a reward is purchased.",
+        "point_cost": 0,
+    }
+    try:
+        with transaction.atomic():
+            reward, _created = Reward.objects.get_or_create(
+                class_attributes="Default Reward",
+                party=None,
+                defaults=defaults,
+            )
+    except IntegrityError:
+        reward = Reward.objects.get(
             class_attributes="Default Reward",
-            party=None,
-            defaults={
-                "name": "Default Reward",
-                "description": "Tracks party membership before a reward is purchased.",
-                "point_cost": 0,
-            },
+            party__isnull=True,
         )
-        if not reward.name:
-            reward.name = "Default Reward"
-            reward.save(update_fields=["name"])
+
+    if not reward.name:
+        Reward.objects.filter(pk=reward.pk, name="").update(name="Default Reward")
+        reward.refresh_from_db(fields=["name"])
 
     return reward
 
