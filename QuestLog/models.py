@@ -83,12 +83,21 @@ class UserProfile(models.Model):
         return get_selected_badges(self)
 
 
+def get_user_profile_defaults(user):
+    return {
+        "display_name": user.get_username(),
+        "profile_title": "",
+        "calling_card": "",
+        "selected_badges": [],
+    }
+
+
 def get_user_profile(user):
     """Return a user's profile, creating one if needed."""
 
     profile, _ = UserProfile.objects.get_or_create(
         user=user,
-        defaults={"display_name": user.get_username()},
+        defaults=get_user_profile_defaults(user),
     )
     return profile
 
@@ -505,6 +514,7 @@ class Task(models.Model):
         null=True,
         validators=[validate_upload, scan_for_malicious_code, validate_image_file],
     )
+    bounty = models.PositiveIntegerField(default=0,help_text="Extra points funded by the task creator, paid out to whoever completes this task.",)
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)
@@ -513,7 +523,12 @@ class Task(models.Model):
 
     def __str__(self):
         return self.name
-
+    #for bountry
+    @property
+    def total_reward(self):
+        """Total points awarded on completion: base difficulty points + bounty points from fellow players!"""
+        return self.point_value +self.bounty
+        
     @property
     def difficulty_vote_count(self):
         """Return the number of difficulty votes."""
