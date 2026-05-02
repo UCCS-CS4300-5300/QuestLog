@@ -2,8 +2,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-#from django.db import transaction
-#import threading
+
 
 from .models import Party, Task, save_user_profile
 
@@ -214,11 +213,13 @@ class CreateTaskForm(forms.ModelForm):
 
     def save(self, commit=True):
         #this is needed to wizardify the task
-
-        name = self.cleaned_data.get('name')
-        description = self.cleaned_data.get('description')
+        instance = super().save(commit=False)
+        
+        is_new = instance._state.adding 
         if is_new: #only call the wizardify function if the task was just created
             try:
+                name = self.cleaned_data.get('name')
+                description = self.cleaned_data.get('description')
                 fantasy_name, fantasy_description = askWizard(name, description)
                 instance.fantasy_name = fantasy_name
                 instance.fantasy_description = fantasy_description
