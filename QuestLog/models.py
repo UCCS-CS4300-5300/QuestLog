@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import IntegrityError, models, transaction
 
@@ -187,7 +188,7 @@ def getPartyDetails(user, guid):
 
     try:
         party = Party.objects.get(guid=guid)
-    except Party.DoesNotExist:
+    except (Party.DoesNotExist, TypeError, ValueError, ValidationError):
         return None
 
     if party.members.filter(pk=user.pk).exists():

@@ -1235,6 +1235,26 @@ class TaskWorkflowTests(TestCase):
         self.assertTemplateUsed(response, "create_task.html")
         self.assertEqual(response.context["selected_party"], self.party)
 
+    def test_create_task_redirects_for_malformed_party_guid(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:create_task"),
+            {"guid": "not-a-guid"},
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
+
+    def test_tasks_redirects_for_malformed_party_guid(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:tasks"),
+            {"guid": "not-a-guid"},
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
+
     def test_create_task_form_uses_party_name_for_affiliation_label(self):
         form = CreateTaskForm(user=self.creator)
         affiliation_field = form.fields["affiliation"]
