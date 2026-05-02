@@ -26,15 +26,27 @@ class UserProfile(models.Model):
         upload_to=profile_picture_upload_to,
         blank=True,
     )
+    profile_title = models.CharField(max_length=80, blank=True, default="")
+    calling_card = models.CharField(max_length=120, blank=True, default="")
+    selected_badges = models.JSONField(blank=True, default=list)
 
     def __str__(self):
         return self.display_name or self.user.get_username()
 
 
+def get_user_profile_defaults(user):
+    return {
+        "display_name": user.get_username(),
+        "profile_title": "",
+        "calling_card": "",
+        "selected_badges": [],
+    }
+
+
 def get_user_profile(user):
     profile, _ = UserProfile.objects.get_or_create(
         user=user,
-        defaults={"display_name": user.get_username()},
+        defaults=get_user_profile_defaults(user),
     )
     return profile
 
@@ -173,6 +185,7 @@ class UserPoints(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     party = models.ForeignKey(Party, on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
+    spent_points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward, on_delete=models.PROTECT)
     avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file])
 
@@ -182,6 +195,10 @@ class UserPoints(models.Model):
         ]
     def __str__(self):
         return f"{self.user.username} - {self.party.party_name}: {self.points}"
+
+    @property
+    def available_points(self):
+        return max(self.points - self.spent_points, 0)
 
 
 

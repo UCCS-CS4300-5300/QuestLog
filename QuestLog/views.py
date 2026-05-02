@@ -508,6 +508,7 @@ def create_party(request):
                 party=party,
                 defaults={
                     "points": 0,
+                    "spent_points": 0,
                     "rewards": default_reward,
                 },
             )
@@ -577,6 +578,7 @@ def accept_party_invitation(request, invitation_id):
             party=invitation.party,
             defaults={
                 "points": 0,
+                "spent_points": 0,
                 "rewards": default_reward,
             },
         )
@@ -659,6 +661,7 @@ def upload_task_proof(request):
         party=task.affiliation,
         defaults={
             "points": 0,
+            "spent_points": 0,
             "rewards": default_reward,
         },
     )
