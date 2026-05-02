@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import dj_database_url
 
@@ -21,6 +22,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def env_bool(name, default=False):
+    """Return whether an environment variable is truthy."""
+
     return os.environ.get(name, str(default)).lower() in ("1", "true", "yes", "on")
 
 # Quick-start development settings - unsuitable for production
@@ -33,6 +36,8 @@ SECRET_KEY = 'django-insecure-b)04hpis%1byb3$r6)fbd95f_$ve^=3(mo9@-y1h973(i(tg%j
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+ON_RENDER = env_bool('RENDER', default=False)
 
 # Safe default: keep DEBUG off unless it is explicitly enabled.
 DEBUG = env_bool('DJANGO_DEBUG', default=False)
@@ -41,6 +46,17 @@ MANAGEMENT_COMMANDS = set(sys.argv[1:])
 RUNNING_TESTS = bool({"test", "behave"} & MANAGEMENT_COMMANDS)
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+if RENDER_EXTERNAL_URL:
+    RENDER_EXTERNAL_URL_PARTS = urlsplit(RENDER_EXTERNAL_URL)
+    if RENDER_EXTERNAL_URL_PARTS.netloc:
+        ALLOWED_HOSTS.append(RENDER_EXTERNAL_URL_PARTS.netloc)
+CSRF_TRUSTED_ORIGINS = []
+if RENDER_EXTERNAL_URL:
+    CSRF_TRUSTED_ORIGINS.append(RENDER_EXTERNAL_URL.rstrip("/"))
+elif RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+if ON_RENDER:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 REDIRECT_ALLOWED_HOSTS = []
 
 
@@ -101,9 +117,12 @@ DATABASES = {
 }
 # This will check if the environment variable provided by render prod environment is available
 # If it is, this will assign the database to the production database provided by render
-# This pattern is what was recommended by the Render documentation for setting this for Django projects
+# This pattern follows Render's recommendation for Django database configuration.
 if os.environ.get('DATABASE_URL'):
-    DATABASES['default'] = dj_database_url.parse(os.environ.get("DATABASE_URL"), conn_max_age=600)
+    DATABASES['default'] = dj_database_url.parse(
+        os.environ.get("DATABASE_URL"),
+        conn_max_age=600,
+    )
 
 
 # Password validation
@@ -215,7 +234,7 @@ BOOTSTRAP5 = {
     # Color mode (None means do not set color mode).
     "color_mode": None,
 
-    # Put JavaScript in the HEAD section of the HTML document (only relevant if you use bootstrap5.html).
+    # Put JavaScript in the HEAD section.
     'javascript_in_head': False,
 
     # Wrapper class for non-inline fields.
@@ -251,10 +270,10 @@ BOOTSTRAP5 = {
     # Class to indicate field has one or more errors (better to set this in your Django form).
     'error_css_class': '',
 
-    # Class to indicate success, meaning the field has valid input (better to set this in your Django form).
+    # Class for a field with valid input.
     'success_css_class': '',
 
-    # Enable or disable Bootstrap 5 server side validation classes (separate from the indicator classes above).
+    # Enable or disable Bootstrap 5 server side validation classes.
     'server_side_validation': True,
 
     # Renderers (only set these if you have studied the source and understand the inner workings).
@@ -268,4 +287,3 @@ BOOTSTRAP5 = {
         'default': 'django_bootstrap5.renderers.FieldRenderer',
     },
 }
-
