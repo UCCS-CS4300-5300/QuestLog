@@ -9,6 +9,8 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
 from .models import Party, Reward, Task, UserPoints, save_user_profile
 
+from . import wizardify
+
 User = get_user_model()
 DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
 DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS = frozenset({"GIF", "JPEG", "PNG", "WEBP"})
@@ -42,7 +44,6 @@ def get_allowed_profile_picture_formats():
 
     normalized_formats.discard("")
     return normalized_formats or DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS
-
 
 class QuestLogUserCreationForm(UserCreationForm):
     """Registration form that also creates a user profile."""
@@ -235,6 +236,8 @@ class CreateTaskForm(forms.ModelForm):
     def __init__(self, *args, user=None, selected_party=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        self.wizard_attempted = False
+        self.wizard_reworded = False
         self.fields["affiliation"].queryset = Party.objects.none()
 
         if user is not None:
@@ -252,6 +255,24 @@ class CreateTaskForm(forms.ModelForm):
         self.fields["bounty"].widget.attrs["class"] = "form-control"
         self.fields["bounty"].required = False
         self.fields["bounty"].initial = 0
+
+    def save(self, commit=True):
+        #this is needed to wizardify the task
+        instance = super().save(commit=False)
+        is_new = instance._state.adding 
+        if is_new: #only call the wizardify function if the task was just created
+            self.wizard_attempted = True
+            name = self.cleaned_data.get('name')
+            description = self.cleaned_data.get('description')
+            fantasy_name, fantasy_description = wizardify.askWizard(name, description)
+            instance.fantasy_name = fantasy_name
+            instance.fantasy_description = fantasy_description
+            self.wizard_reworded = bool(fantasy_name or fantasy_description)
+        
+        if commit:
+            instance.save()
+        return instance 
+
 
     def clean_affiliation(self):
         """Ensure tasks are only created in the user's parties."""
@@ -319,6 +340,8 @@ class CreateTaskForm(forms.ModelForm):
                     "You don't have any points in this party yet. Complete some tasks first.",
                 )
         return cleaned_data
+
+
 
 class TaskDifficultyVoteForm(forms.Form):
     """Form for voting on task difficulty."""

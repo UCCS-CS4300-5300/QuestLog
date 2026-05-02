@@ -53,12 +53,45 @@
         <div
           class="card h-100 task-tile"
           tabindex="0"
+          {% if task.fantasy_name or task.fantasy_description %}data-wizard-task{% endif %}
         >
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
               <div>
-                <h5 class="card-title mb-1">{{ task.name }}</h5>
-                <p class="card-text text-muted mb-0">{{ task.description }}</p>
+                <h5 class="card-title mb-1">
+                  {% if task.fantasy_name or task.fantasy_description %}
+                    <span class="wizard-copy text-primary">
+                      {{ task.fantasy_name|default:task.name|escape|striptags }}
+                    </span>
+                    <span class="original-copy d-none">{{ task.name|escape|striptags }}</span>
+                  {% else %}
+                    {{ task.name }}
+                  {% endif %}
+                </h5>
+
+                {% if task.fantasy_name or task.fantasy_description %}
+                  <p class="card-text mb-2 wizard-copy">
+                    <small>
+                      <em>
+                        "{{ task.fantasy_description|default:task.description|escape|striptags }}"
+                      </em>
+                    </small>
+                  </p>
+                  <p class="card-text text-muted mb-0 small original-copy d-none">
+                    <strong>Original objective:</strong> {{ task.description|escape|striptags }}
+                  </p>
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm wizard-toggle mt-2"
+                    aria-pressed="false"
+                  >
+                    Show original
+                  </button>
+                {% else %}
+                  <p class="card-text text-muted mb-0 small">
+                    <strong>Objective:</strong> {{ task.description|escape|striptags }}
+                  </p>
+                {% endif %}
               </div>
               <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/10</span>
               <a class="btn btn-primary" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">Start Task</a>
@@ -81,51 +114,42 @@
                 <span class="badge text-bg-warning ms-1">+{{ task.bounty }} bounty</span>
               {% endif %}
             </p>
-            
+
           </div>
 
-          <div class="text-end">
-            <span class="badge text-bg-success mb-2 d-inline-block">
-              Difficulty {{ task.weighted_difficulty_display }}/10
-            </span>
-            <div>
-              <a class="btn btn-primary btn-sm" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">
-                Start Task
-              </a>
-            </div>
+          <div class="card-footer bg-transparent">
+            <form method="post" action="{% url 'QuestLog:vote_task_difficulty' task.id %}">
+              {% csrf_token %}
+              <div class="row g-2 align-items-end">
+                <div class="col-sm">
+                  <label class="form-label small text-muted mb-1" for="difficulty-{{ task.id }}">
+                    {% if party_member_count > 1 %}
+                      Your difficulty vote
+                    {% else %}
+                      Adjust difficulty
+                    {% endif %}
+                  </label>
+                  <select id="difficulty-{{ task.id }}" name="rating" class="form-select form-select-sm">
+                    {% for rating_value, rating_label in difficulty_rating_choices %}
+                      <option value="{{ rating_value }}" {% if task.current_user_rating == rating_value %}selected{% endif %}>
+                        {{ rating_label }}/10
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-sm-auto">
+                  <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+                    {% if party_member_count > 1 %}
+                      Save vote
+                    {% else %}
+                      Save difficulty
+                    {% endif %}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
-
-        <form method="post" action="{% url 'QuestLog:vote_task_difficulty' task.id %}">
-          {% csrf_token %}
-          <div class="row g-2 align-items-end">
-            <div class="col-sm-5">
-              <label class="form-label small text-muted mb-1" for="difficulty-{{ task.id }}">
-                {% if party_member_count > 1 %}
-                  your difficulty vote
-                {% else %}
-                  Adjust difficulty
-                {% endif %}
-              </label>
-              <select id="difficulty-{{ task.id }}" name="rating" class="form-select form-select-sm">
-                {% for rating_value, rating_label in difficulty_rating_choices %}
-                  <option value="{{ rating_value }}" {% if task.current_user_rating == rating_value %}selected{% endif %}>
-                    {{ rating_label }}/10
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-sm-auto">
-              <button type="submit" class="btn btn-outline-primary btn-sm">
-                {% if party_member_count > 1 %}
-                  save vote
-                {% else %}
-                  Save difficulty
-                {% endif %}
-              </button>
-            </div>
-          </div>
-        </form>
       </div>
     {% empty %}
       <div class="col-12">
@@ -163,6 +187,24 @@
           event.preventDefault();
           goToTask();
         }
+      });
+    });
+
+    document.querySelectorAll(".wizard-toggle").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskCard = button.closest("[data-wizard-task]");
+        const showOriginal = button.getAttribute("aria-pressed") !== "true";
+
+        taskCard.querySelectorAll(".wizard-copy").forEach((element) => {
+          element.classList.toggle("d-none", showOriginal);
+        });
+
+        taskCard.querySelectorAll(".original-copy").forEach((element) => {
+          element.classList.toggle("d-none", !showOriginal);
+        });
+
+        button.setAttribute("aria-pressed", showOriginal ? "true" : "false");
+        button.textContent = showOriginal ? "Show fantasy" : "Show original";
       });
     });
   })();

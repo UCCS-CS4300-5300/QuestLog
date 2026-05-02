@@ -9,10 +9,41 @@
 
         {% if tasks %}
             {% for task in tasks %}
-                <div class="card mb-3">
+                <div
+                    class="card mb-3"
+                    {% if task.fantasy_name or task.fantasy_description %}data-wizard-task{% endif %}
+                >
                     <div class="card-body">
-                        <h5 class="card-title">{{ task.name }}</h5>
-                        <p class="card-text">{{ task.description|striptags }}</p>
+                        <h5 class="card-title">
+                            {% if task.fantasy_name or task.fantasy_description %}
+                                <span class="wizard-copy text-primary">
+                                    {{ task.fantasy_name|default:task.name|escape|striptags }}
+                                </span>
+                                <span class="original-copy d-none">{{ task.name|escape|striptags }}</span>
+                            {% else %}
+                                {{ task.name }}
+                            {% endif %}
+                        </h5>
+
+                        {% if task.fantasy_name or task.fantasy_description %}
+                            <p class="card-text wizard-copy">
+                                <i class="text-secondary">
+                                    "{{ task.fantasy_description|default:task.description|escape|striptags }}"
+                                </i>
+                            </p>
+                            <p class="card-text original-copy d-none">
+                                {{ task.description|escape|striptags }}
+                            </p>
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm wizard-toggle mb-3"
+                                aria-pressed="false"
+                            >
+                                Show original
+                            </button>
+                        {% else %}
+                            <p class="card-text">{{ task.description|escape|striptags }}</p>
+                        {% endif %}
                         <p class="card-text mb-1"><strong>Difficulty:</strong> {{ task.difficulty_rating }}/10</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
                         
@@ -51,4 +82,25 @@
             <p>No completed tasks found yet.</p>
         {% endif %}
     </div>
+    <script>
+        (function () {
+            document.querySelectorAll(".wizard-toggle").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const taskCard = button.closest("[data-wizard-task]");
+                    const showOriginal = button.getAttribute("aria-pressed") !== "true";
+
+                    taskCard.querySelectorAll(".wizard-copy").forEach((element) => {
+                        element.classList.toggle("d-none", showOriginal);
+                    });
+
+                    taskCard.querySelectorAll(".original-copy").forEach((element) => {
+                        element.classList.toggle("d-none", !showOriginal);
+                    });
+
+                    button.setAttribute("aria-pressed", showOriginal ? "true" : "false");
+                    button.textContent = showOriginal ? "Show fantasy" : "Show original";
+                });
+            });
+        })();
+    </script>
 {% endblock %}

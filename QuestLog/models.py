@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
+from QuestLog.utilities import (scan_for_malicious_code, secure_upload_path_avatars, 
+secure_upload_path_proofs, validate_image_file, validate_upload)
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import IntegrityError, models, transaction
@@ -501,6 +503,8 @@ class Task(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
     name = models.CharField(max_length=120, default="Untitled Task")
     description = models.TextField(max_length=500)
+    fantasy_name = models.CharField(max_length=120, null=True, blank=True)
+    fantasy_description = models.TextField(max_length=500, null=True, blank=True)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,
         default=Status.NOT_STARTED,

@@ -13,10 +13,11 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import SimpleTestCase, TestCase
@@ -307,6 +308,75 @@ class UrlConfigurationTests(SimpleTestCase):
             self.assertIsNotNone(match)
 
         self.reload_urlconf()
+
+
+class WizardifyTests(SimpleTestCase):
+    def setUp(self):
+        from . import wizardify
+
+        wizardify.LAST_WIZARD_FAILURE = 0
+        wizardify.LAST_WIZARD_FAILURE_REASON = ""
+
+    def test_ask_wizard_uses_current_gemini_rest_request_shape(self):
+        from . import wizardify
+
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": json.dumps(
+                                    {
+                                        "fantasy_task": "Polish the Guild Hall",
+                                        "fantasy_description": "Restore order after the feast.",
+                                    }
+                                )
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "API_KEY": "test-api-key",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
+                "GEMINI_MODEL": "",
+            },
+        ):
+            with patch("QuestLog.wizardify.requests.post", return_value=response) as mock_post:
+                result = wizardify.askWizard("Clean kitchen", "Reset the tables.")
+
+        args, kwargs = mock_post.call_args
+
+        self.assertEqual(result, ("Polish the Guild Hall", "Restore order after the feast."))
+        self.assertEqual(
+            args[0],
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-2.5-flash:generateContent",
+        )
+        self.assertEqual(kwargs["headers"]["x-goog-api-key"], "test-api-key")
+        self.assertEqual(kwargs["json"]["generationConfig"]["responseMimeType"], "application/json")
+        self.assertIn("responseJsonSchema", kwargs["json"]["generationConfig"])
+
+    def test_ask_wizard_skips_api_when_key_is_missing(self):
+        from . import wizardify
+
+        with patch.dict(
+            os.environ,
+            {"API_KEY": "", "GEMINI_API_KEY": "", "GOOGLE_API_KEY": ""},
+        ):
+            with patch("QuestLog.wizardify.requests.post") as mock_post:
+                result = wizardify.askWizard("Clean kitchen", "Reset the tables.")
+
+        self.assertEqual(result, (None, None))
+        mock_post.assert_not_called()
 
 
 class UserProfileTests(TestCase):
@@ -1078,6 +1148,28 @@ class TaskPagesTemplateTests(TestCase):
         self.assertNotContains(response, "Done Item")
         self.assertContains(response, reverse("QuestLog:task_history"))
 
+    def test_tasks_view_keeps_difficulty_controls_inside_task_card(self):
+        response = self.client.get(reverse("QuestLog:tasks"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="card-footer bg-transparent"')
+        self.assertContains(response, reverse("QuestLog:vote_task_difficulty", args=[self.active_task.id]))
+        self.assertContains(response, "Your difficulty vote")
+
+    def test_tasks_view_defaults_to_fantasy_copy_with_original_toggle(self):
+        self.active_task.fantasy_name = "The Unfurled Errand"
+        self.active_task.fantasy_description = "Carry forth the humble duty."
+        self.active_task.save(update_fields=["fantasy_name", "fantasy_description"])
+
+        response = self.client.get(reverse("QuestLog:tasks"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The Unfurled Errand")
+        self.assertContains(response, "Carry forth the humble duty.")
+        self.assertContains(response, "Show original")
+        self.assertContains(response, "Original objective:")
+        self.assertContains(response, "original-copy d-none")
+
     def test_task_history_view_shows_only_completed_tasks_for_logged_in_user(self):
         response = self.client.get(reverse("QuestLog:task_history"))
 
@@ -1089,6 +1181,19 @@ class TaskPagesTemplateTests(TestCase):
         self.assertContains(response, self.completed_task.proofs.url)
         self.assertContains(response, reverse("QuestLog:tasks"))
         self.assertNotContains(response, "Accept")
+
+    def test_task_history_defaults_to_fantasy_copy_with_original_toggle(self):
+        self.completed_task.fantasy_name = "The Sealed Victory"
+        self.completed_task.fantasy_description = "The proof has been delivered to the guild."
+        self.completed_task.save(update_fields=["fantasy_name", "fantasy_description"])
+
+        response = self.client.get(reverse("QuestLog:task_history"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The Sealed Victory")
+        self.assertContains(response, "The proof has been delivered to the guild.")
+        self.assertContains(response, "Show original")
+        self.assertContains(response, "original-copy d-none")
 
 class LeaderboardViewTests(TestCase):
     def setUp(self):
@@ -1379,6 +1484,57 @@ class TaskWorkflowTests(TestCase):
                 voter=self.creator,
                 rating=4,
             ).exists()
+        )
+
+    def test_create_task_post_saves_wizard_reworded_copy(self):
+        self.client.force_login(self.creator)
+
+        with patch(
+            "QuestLog.forms.wizardify.askWizard",
+            return_value=("Polish the Hall of Guilds", "Restore the tables after the raid."),
+        ):
+            response = self.client.post(
+                reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+                {
+                    "guid": str(self.party.guid),
+                    "affiliation": self.party.id,
+                    "name": "Clean the guild hall",
+                    "description": "Sweep the floors and reset the tables after raid night.",
+                    "difficulty_rating": 4,
+                    "recurring": 0,
+                },
+            )
+
+        task = Task.objects.get(name="Clean the guild hall")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(task.fantasy_name, "Polish the Hall of Guilds")
+        self.assertEqual(task.fantasy_description, "Restore the tables after the raid.")
+
+    def test_create_task_post_warns_when_wizard_returns_no_rewrite(self):
+        self.client.force_login(self.creator)
+
+        with patch("QuestLog.forms.wizardify.askWizard", return_value=(None, None)):
+            response = self.client.post(
+                reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+                {
+                    "guid": str(self.party.guid),
+                    "affiliation": self.party.id,
+                    "name": "Clean the guild hall",
+                    "description": "Sweep the floors and reset the tables after raid night.",
+                    "difficulty_rating": 4,
+                    "recurring": 0,
+                },
+            )
+
+        task = Task.objects.get(name="Clean the guild hall")
+        user_messages = [str(message) for message in get_messages(response.wsgi_request)]
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(task.fantasy_name)
+        self.assertIsNone(task.fantasy_description)
+        self.assertTrue(
+            any("AI wizard did not return a fantasy rewrite" in message for message in user_messages)
         )
 
     def test_tasks_view_shows_add_task_link_for_selected_party(self):
