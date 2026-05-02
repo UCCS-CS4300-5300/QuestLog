@@ -89,55 +89,59 @@
                 &middot; One-time task
               {% endif %}
             </p>
-             <p class="card-text small mb-0">
-                  <strong>Worth:</strong> {{ task.point_value }} points
-                </p>
-              </div>
 
-              <div class="text-end">
-                <span class="badge text-bg-success mb-2 d-inline-block">
-                  Difficulty {{ task.weighted_difficulty_display }}/10
-                </span>
-                <div>
-                  <a class="btn btn-primary btn-sm" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">
-                    Start Task
-                  </a>
-                </div>
-              </div>
+            {#bounty stuff to show total reward for simplicity --- #}
+            <p class="card-text small mb-0">
+              <strong>Worth:</strong> {{ task.total_reward }} points
+              {% if task.bounty > 0 %}
+                <span class="badge text-bg-warning ms-1">+{{ task.bounty }} bounty</span>
+              {% endif %}
+            </p>
+            
+          </div>
+
+          <div class="text-end">
+            <span class="badge text-bg-success mb-2 d-inline-block">
+              Difficulty {{ task.weighted_difficulty_display }}/10
+            </span>
+            <div>
+              <a class="btn btn-primary btn-sm" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">
+                Start Task
+              </a>
             </div>
-
-            <form method="post" action="{% url 'QuestLog:vote_task_difficulty' task.id %}">
-              {% csrf_token %}
-              <div class="row g-2 align-items-end">
-                <div class="col-sm-5">
-                  <label class="form-label small text-muted mb-1" for="difficulty-{{ task.id }}">
-                    {% if party_member_count > 1 %}
-                      Your difficulty vote
-                    {% else %}
-                      Adjust difficulty
-                    {% endif %}
-                  </label>
-                  <select id="difficulty-{{ task.id }}" name="rating" class="form-select form-select-sm">
-                    {% for rating_value, rating_label in difficulty_rating_choices %}
-                      <option value="{{ rating_value }}" {% if task.current_user_rating == rating_value %}selected{% endif %}>
-                        {{ rating_label }}/10
-                      </option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="col-sm-auto">
-                  <button type="submit" class="btn btn-outline-primary btn-sm">
-                    {% if party_member_count > 1 %}
-                      Save vote
-                    {% else %}
-                      Save difficulty
-                    {% endif %}
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
+
+        <form method="post" action="{% url 'QuestLog:vote_task_difficulty' task.id %}">
+          {% csrf_token %}
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-5">
+              <label class="form-label small text-muted mb-1" for="difficulty-{{ task.id }}">
+                {% if party_member_count > 1 %}
+                  your difficulty vote
+                {% else %}
+                  Adjust difficulty
+                {% endif %}
+              </label>
+              <select id="difficulty-{{ task.id }}" name="rating" class="form-select form-select-sm">
+                {% for rating_value, rating_label in difficulty_rating_choices %}
+                  <option value="{{ rating_value }}" {% if task.current_user_rating == rating_value %}selected{% endif %}>
+                    {{ rating_label }}/10
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-sm-auto">
+              <button type="submit" class="btn btn-outline-primary btn-sm">
+                {% if party_member_count > 1 %}
+                  save vote
+                {% else %}
+                  Save difficulty
+                {% endif %}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     {% empty %}
       <div class="col-12">

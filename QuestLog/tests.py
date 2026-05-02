@@ -223,6 +223,20 @@ class UserProfileTests(TestCase):
         self.assertTrue(generated_path.endswith(".gif"))
         self.assertNotEqual(generated_path, "profile_pictures/avatar.gif")
 
+    def test_get_user_profile_recreates_missing_profile_with_required_defaults(self):
+        user = get_user_model().objects.create_user(
+            username="missingprofile",
+            password="6767676767676767",
+        )
+        user.profile.delete()
+
+        profile = get_user_profile(user)
+
+        self.assertEqual(profile.display_name, "missingprofile")
+        self.assertEqual(profile.profile_title, "")
+        self.assertEqual(profile.calling_card, "")
+        self.assertEqual(profile.selected_badges, [])
+
     def test_string_representation_prefers_display_name(self):
         user = get_user_model().objects.create_user(
             username="liljit",
@@ -1380,9 +1394,9 @@ class PartyInvitationWorkflowTests(TestCase):
         )
 
         party = Party.objects.get(party_name="B Team")
-        self.assertTrue(
-            UserPoints.objects.filter(user=self.creator, party=party).exists()
-        )
+        user_points = UserPoints.objects.get(user=self.creator, party=party)
+        self.assertEqual(user_points.points, 0)
+        self.assertEqual(user_points.spent_points, 0)
 
     def test_create_party_with_valid_invited_username_creates_pending_invitation(self):
         self.client.force_login(self.creator)
@@ -1578,12 +1592,12 @@ class PartyInvitationWorkflowTests(TestCase):
         self.client.force_login(self.invited_user)
         self.client.post(reverse("QuestLog:accept_party_invitation", args=[invitation.id]))
 
-        self.assertTrue(
-            UserPoints.objects.filter(
-                user=self.invited_user,
-                party=party,
-            ).exists()
+        user_points = UserPoints.objects.get(
+            user=self.invited_user,
+            party=party,
         )
+        self.assertEqual(user_points.points, 0)
+        self.assertEqual(user_points.spent_points, 0)
 
     def test_decline_party_invitation_updates_status_and_does_not_add_member(self):
         party = Party.objects.create(
@@ -1909,4 +1923,3 @@ class TaskDifficultyAndRecurringTests(TestCase):
     #     self.assertEqual(response.status_code, 200)
     #     self.assertTemplateUsed(response, "party_details.html")
     #     self.assertEqual(response.context.get("party"), self.party)
-
