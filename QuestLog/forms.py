@@ -289,26 +289,35 @@ class CreateTaskForm(forms.ModelForm):
         return recurring
 
     def clean_bounty(self):
-        #cant be negative
-        bounty =self.cleaned_data.get("bounty") or 0
-        if bounty <0:
+        """Reject negative bounties."""
+
+        bounty = self.cleaned_data.get("bounty") or 0
+        if bounty < 0:
             raise forms.ValidationError("Bounty cannot be negative.")
         return bounty
 
     def clean(self):
-        # makes sure user has enough points to cover the bounty itself
-        cleaned_data =super().clean()
-        bounty =cleaned_data.get("bounty") or 0
-        party =cleaned_data.get("affiliation")
-        if bounty >0 and party and self.user:
+        """Ensure the user has enough party points to fund a bounty."""
+
+        cleaned_data = super().clean()
+        bounty = cleaned_data.get("bounty") or 0
+        party = cleaned_data.get("affiliation")
+        if bounty > 0 and party and self.user:
             try:
-                user_points =UserPoints.objects.get(user=self.user, party=party)
+                user_points = UserPoints.objects.get(user=self.user, party=party)
                 if user_points.points < bounty:
                     self.add_error(
-                        "bounty", f"Not enough points. you have {user_points.points} points in {party.party_name}.",)
+                        "bounty",
+                        (
+                            f"Not enough points. You have {user_points.points} points "
+                            f"in {party.party_name}."
+                        ),
+                    )
             except UserPoints.DoesNotExist:
                 self.add_error(
-                    "bounty","You don't have any points in this party yet. Complete some tasks first",)
+                    "bounty",
+                    "You don't have any points in this party yet. Complete some tasks first.",
+                )
         return cleaned_data
 
 class TaskDifficultyVoteForm(forms.Form):

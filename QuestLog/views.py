@@ -1058,8 +1058,7 @@ def upload_task_proof(request):
 
     file1 = request.FILES.get("proof_file")
     task_id = request.POST.get("task_id")
-    #any party member can submit proof not just task creator
-    # really important for bounties to work properlyand so someone else can claim a bounty task aswell
+    # Any party member can submit proof so someone else can claim a bounty task.
     task = (
         Task.objects.filter(id=task_id, affiliation__members=request.user)
         .exclude(status=Task.Status.COMPLETED)
