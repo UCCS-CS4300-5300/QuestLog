@@ -3,13 +3,16 @@ import json
 import random
 import os
 from dotenv import load_dotenv
-import logging
-from django.core.cache import cache  # Import Django's cache
+from django.core.cache import cache  #use cache
 
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 #gemini-flash-latest makes it so if in the future the model being used is discontinued, 
 #it will automatically use the latest model
+
+load_dotenv()
+API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
+#need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
 
 
 
@@ -21,10 +24,7 @@ def askWizard (name, desc):
     #output (fantasy task name, fantasy task description)
 
 
-    if not os.getenv("API_KEY"):
-        load_dotenv()
-    API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
-    #need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
+    
 
     nameFailed = name
     descFailed = ("Sorry it appears some miscreant has vandalized the quest board."
@@ -33,9 +33,9 @@ def askWizard (name, desc):
 
 
 
-    if not API_KEY:
+    if (not API_KEY) or cache.get("wizard_not_working"):
         return (nameFailed, descFailed)
-        #don't make a useless call if there is no API key
+        #don't make a useless call if there is no API key or if the wizard isn't working
 
     random_number = random.randint(1, 4)
     #randomly determine what fantasy character is giving the quest
@@ -93,14 +93,17 @@ def askWizard (name, desc):
                 #gemini's response was too long. 
                 #the prompt gemini receives requests a max length of 50 and 400 characters
                 #but this limit is higher just to be safe.
+                #do not flag wizard as not working since it still works
 
             return (wizardName, wizardDesc)
         except (KeyError, IndexError, TypeError):
             #this handles if the response structure from gemini is unexpected
+            cache.set("wizard_not_working", True, 180) # Stop trying for 3 minutes
             return (nameFailed, descFailed)
     except Exception as e:
         #this try/except block handles if we receive an error response from gemini
         #such as no api tokens left or some other error. 
+        cache.set("wizard_not_working", True, 180) # disable the wizard for 3 minutes
         return (nameFailed, descFailed)
     
 

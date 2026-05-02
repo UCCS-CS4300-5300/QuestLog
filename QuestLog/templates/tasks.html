@@ -59,8 +59,8 @@
               <div>
                 <h5 class="card-title mb-1">
                   {% if task.fantasy_name %}
-                    <span class="text-primary">{{ task.fantasy_name }}</span>
-                    <div class="small text-muted" style="font-size: 0.75rem;">({{ task.name }})</div>
+                    <span class="text-primary">{{ task.fantasy_name|striptags }}</span>
+                    <div class="small text-muted" style="font-size: 0.75rem;">({{ task.name|striptags }})</div>
                   {% else %}
                     {{ task.name }}
                   {% endif %}

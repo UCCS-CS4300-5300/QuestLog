@@ -13,8 +13,8 @@
                     <div class="card-body">
                         <h5 class="card-title">
                             {% if task.fantasy_name %}
-                                {{ task.fantasy_name }} 
-                                <small class="text-muted" style="font-size: 0.7em;">({{ task.name }})</small>
+                                {{ task.fantasy_name|striptags }} 
+                                <small class="text-muted" style="font-size: 0.7em;">({{ task.name|striptags }})</small>
                             {% else %}
                                 {{ task.name }}
                             {% endif %}
