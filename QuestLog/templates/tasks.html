@@ -59,8 +59,8 @@
               <div>
                 <h5 class="card-title mb-1">
                   {% if task.fantasy_name %}
-                    <span class="text-primary">{{ task.fantasy_name|striptags }}</span>
-                    <div class="small text-muted" style="font-size: 0.75rem;">({{ task.name|striptags }})</div>
+                    <span class="text-primary">{{ task.fantasy_name|escape|striptags }}</span>
+                    <div class="small text-muted" style="font-size: 0.75rem;">({{ task.name|escape|striptags }})</div>
                   {% else %}
                     {{ task.name }}
                   {% endif %}
@@ -68,12 +68,12 @@
 
                 {% if task.fantasy_description %}
                   <p class="card-text mb-2">
-                    <small><em>"{{ task.fantasy_description|striptags }}"</em></small>
+                    <small><em>"{{ task.fantasy_description|escape|striptags }}"</em></small>
                   </p>
                 {% endif %}
 
                 <p class="card-text text-muted mb-0 small">
-                  <strong>Objective:</strong> {{ task.description|striptags }}
+                  <strong>Objective:</strong> {{ task.description|escape|striptags }}
                 </p>
               </div>
               <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/10</span>

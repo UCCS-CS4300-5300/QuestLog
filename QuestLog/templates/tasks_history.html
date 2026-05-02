@@ -13,8 +13,8 @@
                     <div class="card-body">
                         <h5 class="card-title">
                             {% if task.fantasy_name %}
-                                {{ task.fantasy_name|striptags }} 
-                                <small class="text-muted" style="font-size: 0.7em;">({{ task.name|striptags }})</small>
+                                {{ task.fantasy_name|escape|striptags }} 
+                                <small class="text-muted" style="font-size: 0.7em;">({{ task.name|escape|striptags }})</small>
                             {% else %}
                                 {{ task.name }}
                             {% endif %}
@@ -22,10 +22,10 @@
 
                         {% if task.fantasy_description %}
                         <p class="card-text">
-                            <i class="text-secondary">"{{ task.fantasy_description|striptags }}"</i>
+                            <i class="text-secondary">"{{ task.fantasy_description|escape|striptags }}"</i>
                         </p>
                         {% endif %}
-                        <p class="card-text">{{ task.description|striptags }}</p>
+                        <p class="card-text">{{ task.description|escape|striptags }}</p>
                         <p class="card-text mb-1"><strong>Difficulty:</strong> {{ task.difficulty_rating }}/10</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>
                         
