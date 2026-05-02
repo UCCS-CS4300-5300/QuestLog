@@ -224,9 +224,9 @@ class CreateTaskForm(forms.ModelForm):
                 fantasy_name, fantasy_description = askWizard(name, description)
                 instance.fantasy_name = fantasy_name
                 instance.fantasy_description = fantasy_description
-                
+
             instance.save()
-            self.save_m2m() 
+        return instance 
 
 
     def clean_affiliation(self):
