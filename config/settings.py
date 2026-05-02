@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import dj_database_url
 
@@ -33,6 +34,8 @@ SECRET_KEY = 'django-insecure-b)04hpis%1byb3$r6)fbd95f_$ve^=3(mo9@-y1h973(i(tg%j
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL')
+ON_RENDER = env_bool('RENDER', default=False)
 
 # Safe default: keep DEBUG off unless it is explicitly enabled.
 DEBUG = env_bool('DJANGO_DEBUG', default=False)
@@ -41,6 +44,17 @@ MANAGEMENT_COMMANDS = set(sys.argv[1:])
 RUNNING_TESTS = bool({"test", "behave"} & MANAGEMENT_COMMANDS)
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+if RENDER_EXTERNAL_URL:
+    RENDER_EXTERNAL_URL_PARTS = urlsplit(RENDER_EXTERNAL_URL)
+    if RENDER_EXTERNAL_URL_PARTS.netloc:
+        ALLOWED_HOSTS.append(RENDER_EXTERNAL_URL_PARTS.netloc)
+CSRF_TRUSTED_ORIGINS = []
+if RENDER_EXTERNAL_URL:
+    CSRF_TRUSTED_ORIGINS.append(RENDER_EXTERNAL_URL.rstrip("/"))
+elif RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
+if ON_RENDER:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 REDIRECT_ALLOWED_HOSTS = []
 
 
@@ -268,4 +282,3 @@ BOOTSTRAP5 = {
         'default': 'django_bootstrap5.renderers.FieldRenderer',
     },
 }
-

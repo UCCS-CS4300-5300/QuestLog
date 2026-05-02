@@ -186,21 +186,97 @@ class SettingsBranchCoverageTests(SimpleTestCase):
         module = importlib.import_module("config.settings")
         original_argv = sys.argv[:]
         original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        original_render_url = os.environ.get("RENDER_EXTERNAL_URL")
         original_debug = os.environ.get("DJANGO_DEBUG")
 
         try:
             os.environ["RENDER_EXTERNAL_HOSTNAME"] = "example.test"
+            os.environ.pop("RENDER_EXTERNAL_URL", None)
             os.environ["DJANGO_DEBUG"] = "0"
             sys.argv = ["manage.py", "runserver"]
 
             reloaded = importlib.reload(module)
             self.assertIn("example.test", reloaded.ALLOWED_HOSTS)
+            self.assertIn("https://example.test", reloaded.CSRF_TRUSTED_ORIGINS)
             self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", reloaded.MIDDLEWARE)
         finally:
             if original_render is None:
                 os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
             else:
                 os.environ["RENDER_EXTERNAL_HOSTNAME"] = original_render
+
+            if original_render_url is None:
+                os.environ.pop("RENDER_EXTERNAL_URL", None)
+            else:
+                os.environ["RENDER_EXTERNAL_URL"] = original_render_url
+
+            if original_debug is None:
+                os.environ.pop("DJANGO_DEBUG", None)
+            else:
+                os.environ["DJANGO_DEBUG"] = original_debug
+
+            sys.argv = original_argv
+            importlib.reload(module)
+
+    def test_render_external_url_configures_allowed_host_and_csrf_origin(self):
+        module = importlib.import_module("config.settings")
+        original_argv = sys.argv[:]
+        original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        original_render_url = os.environ.get("RENDER_EXTERNAL_URL")
+        original_debug = os.environ.get("DJANGO_DEBUG")
+
+        try:
+            os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            os.environ["RENDER_EXTERNAL_URL"] = "https://preview-questlog.onrender.com"
+            os.environ["DJANGO_DEBUG"] = "0"
+            sys.argv = ["manage.py", "runserver"]
+
+            reloaded = importlib.reload(module)
+            self.assertIn("preview-questlog.onrender.com", reloaded.ALLOWED_HOSTS)
+            self.assertIn(
+                "https://preview-questlog.onrender.com",
+                reloaded.CSRF_TRUSTED_ORIGINS,
+            )
+        finally:
+            if original_render is None:
+                os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            else:
+                os.environ["RENDER_EXTERNAL_HOSTNAME"] = original_render
+
+            if original_render_url is None:
+                os.environ.pop("RENDER_EXTERNAL_URL", None)
+            else:
+                os.environ["RENDER_EXTERNAL_URL"] = original_render_url
+
+            if original_debug is None:
+                os.environ.pop("DJANGO_DEBUG", None)
+            else:
+                os.environ["DJANGO_DEBUG"] = original_debug
+
+            sys.argv = original_argv
+            importlib.reload(module)
+
+    def test_render_uses_forwarded_proto_for_secure_requests(self):
+        module = importlib.import_module("config.settings")
+        original_argv = sys.argv[:]
+        original_render_flag = os.environ.get("RENDER")
+        original_debug = os.environ.get("DJANGO_DEBUG")
+
+        try:
+            os.environ["RENDER"] = "true"
+            os.environ["DJANGO_DEBUG"] = "0"
+            sys.argv = ["manage.py", "runserver"]
+
+            reloaded = importlib.reload(module)
+            self.assertEqual(
+                reloaded.SECURE_PROXY_SSL_HEADER,
+                ("HTTP_X_FORWARDED_PROTO", "https"),
+            )
+        finally:
+            if original_render_flag is None:
+                os.environ.pop("RENDER", None)
+            else:
+                os.environ["RENDER"] = original_render_flag
 
             if original_debug is None:
                 os.environ.pop("DJANGO_DEBUG", None)
