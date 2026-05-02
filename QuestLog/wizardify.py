@@ -5,10 +5,6 @@ import os
 from dotenv import load_dotenv
 
 
-load_dotenv() 
-API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
-#need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
-
 URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 #gemini-flash-latest makes it so if in the future the model being used is discontinued, 
 #it will automatically use the latest model
@@ -21,6 +17,12 @@ def askWizard (name, desc):
     #if it fails, it will instead return the a error placeholders in the same form and quest giver being "none"
     #input (task name, task description)
     #output (fantasy task name, fantasy task description)
+
+
+    if not os.getenv("API_KEY"):
+        load_dotenv()
+    API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
+    #need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
 
     nameFailed = name
     descFailed = ("Sorry it appears some miscreant has vandalized the quest board."
