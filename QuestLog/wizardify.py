@@ -3,7 +3,7 @@ import json
 import random
 import os
 from dotenv import load_dotenv
-from django.core.cache import cache  #use cache
+from django.utils.html import strip_tags #clean data
 
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
@@ -33,7 +33,7 @@ def askWizard (name, desc):
 
 
 
-    if (not API_KEY) or cache.get("wizard_not_working"):
+    if (not API_KEY):
         return (nameFailed, descFailed)
         #don't make a useless call if there is no API key or if the wizard isn't working
 
@@ -87,8 +87,8 @@ def askWizard (name, desc):
             #it is very unlikely this will ever be the case, but it is good practice
             rawStr = temp['candidates'][0]['content']['parts'][0]['text']
             reply = json.loads(rawStr)
-            wizardName = reply['fantasy_task']
-            wizardDesc = reply['fantasy_description']
+            wizardName = strip_tags(reply['fantasy_task'])
+            wizardDesc = strip_tags(reply['fantasy_description'])
             if (len(wizardName) > 120) or (len(wizardDesc) > 500):
                 return (nameFailed, descFailed) 
                 #gemini's response was too long. 
@@ -98,13 +98,11 @@ def askWizard (name, desc):
 
             return (wizardName, wizardDesc)
         except (KeyError, IndexError, TypeError):
-            #this handles if the response structure from gemini is unexpected
-            cache.set("wizard_not_working", True, 180) # Stop trying for 3 minutes
+            #this handles if the response structure from gemini is unexpecte
             return (nameFailed, descFailed)
     except Exception as e:
         #this try/except block handles if we receive an error response from gemini
         #such as no api tokens left or some other error. 
-        cache.set("wizard_not_working", True, 180) # disable the wizard for 3 minutes
         return (nameFailed, descFailed)
     
 
