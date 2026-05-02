@@ -25,7 +25,7 @@ WIZ_BREAK_DURATION = 180 #if the wizard isn't working, disable it for 3 minutes
 def askWizard (name, desc): 
     #takes the task name and a short description as input
     #prompts gemini to translate it into wizard speak
-    #if it fails, it will instead return the a error placeholders in the same form and quest giver being "none"
+    #if it fails, it will instead return (None, None)
     #input (task name, task description)
     #output (fantasy task name, fantasy task description)
 
@@ -33,14 +33,13 @@ def askWizard (name, desc):
 
     currentTime = time.time()
     
-    nameFailed = name
-    descFailed = ("Sorry it appears some miscreant has vandalized the quest board."
-    " Please view the original task to see the description for this quest")
-    #if there is no in-app way to view the original task description, change descFailed into desc
+    nameFailed = None
+    descFailed = None
+    #These are None to prevent repeat text showing up in task ui
 
 
 
-    if (not API_KEY) or ((currentTime - LAST_WIZARD_FAILURE) > WIZ_BREAK_DURATION):
+    if (not API_KEY) or ((currentTime - LAST_WIZARD_FAILURE) < WIZ_BREAK_DURATION):
         return (nameFailed, descFailed)
         #don't make a useless call if there is no API key or if the wizard isn't working
 
@@ -96,7 +95,7 @@ def askWizard (name, desc):
             reply = json.loads(rawStr)
             wizardName = strip_tags(reply['fantasy_task'])
             wizardDesc = strip_tags(reply['fantasy_description'])
-            if (len(wizardName) > 120) or (len(wizardDesc) > 500):
+            if (len(wizardName) >= 120) or (len(wizardDesc) >= 500):
                 return (nameFailed, descFailed) 
                 #gemini's response was too long. 
                 #the prompt gemini receives requests a max length of 50 and 400 characters
