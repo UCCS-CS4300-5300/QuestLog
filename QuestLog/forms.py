@@ -216,18 +216,15 @@ class CreateTaskForm(forms.ModelForm):
         instance = super().save(commit=False)
         
         is_new = instance._state.adding 
-        if is_new: #only call the wizardify function if the task was just created
-            try:
+        
+        if commit:
+            if is_new: #only call the wizardify function if the task was just created
                 name = self.cleaned_data.get('name')
                 description = self.cleaned_data.get('description')
                 fantasy_name, fantasy_description = askWizard(name, description)
                 instance.fantasy_name = fantasy_name
                 instance.fantasy_description = fantasy_description
-            except Exception:
-                # this ensures that no matter what happens with the askWizard function
-                # a task will still be created
-                pass
-        if commit:
+                
             instance.save()
             self.save_m2m() 
 
