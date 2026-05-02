@@ -47,7 +47,7 @@ def askWizard(name, desc):
         )
         return failed_response
 
-    api_key = settings.GEMINI_API_KEY if settings.GEMINI_API_KEY is not None else os.getenviron.get('API_KEY')
+    api_key = settings.GEMINI_API_KEY if settings.GEMINI_API_KEY is not None else os.environ.get('API_KEY')
     if not api_key:
         reason = "API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY is not configured."
         remember_failure(reason, use_cooldown=False)
