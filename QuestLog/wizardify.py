@@ -78,13 +78,12 @@ def askWizard (name, desc):
     }
 
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": API_KEY
-    } #Using a header like this should help keep the API key more secure. 
+    
+    # only construct it here so its hidden
+    request_url = f"{URL}?key={API_KEY}"
 
     try:
-        response = requests.post(URL, json=payload, headers=headers, timeout=2)
+        response = requests.post(request_url, json=payload, timeout=10)
         response.raise_for_status()
         temp = response.json ()
         try: 
@@ -105,14 +104,14 @@ def askWizard (name, desc):
             #this handles if the response structure from gemini is unexpected
             LAST_WIZARD_FAILURE = time.time()
             return (nameFailed, descFailed)
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
         #this code functionally does nothing because of the next except Exception block
         #but separating it out can help with potential future debugging
         LAST_WIZARD_FAILURE = time.time()
         return (nameFailed, descFailed)
     except Exception:
         #this try/except block handles if we receive an error response from gemini
-        #such as no api tokens left or some other error. 
+        #such as no api tokens left or some other error.
         LAST_WIZARD_FAILURE = time.time()
         return (nameFailed, descFailed)
     
