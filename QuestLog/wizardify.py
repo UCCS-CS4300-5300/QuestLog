@@ -4,7 +4,6 @@ import random
 import os
 import time
 from dotenv import load_dotenv
-from django.core.cache import cache
 from django.utils.html import strip_tags #clean data
 
 
@@ -95,7 +94,7 @@ def askWizard (name, desc):
             reply = json.loads(rawStr)
             wizardName = strip_tags(reply['fantasy_task'])
             wizardDesc = strip_tags(reply['fantasy_description'])
-            if (len(wizardName) >= 120) or (len(wizardDesc) >= 500):
+            if (len(wizardName) > 120) or (len(wizardDesc) > 500):
                 return (nameFailed, descFailed) 
                 #gemini's response was too long. 
                 #the prompt gemini receives requests a max length of 50 and 400 characters

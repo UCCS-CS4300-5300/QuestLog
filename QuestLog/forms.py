@@ -2,6 +2,8 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.db import transaction
+import threading
 
 from .models import Party, Task, save_user_profile
 
@@ -36,7 +38,6 @@ def get_allowed_profile_picture_formats():
 
     normalized_formats.discard("")
     return normalized_formats or DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS
-
 
 class QuestLogUserCreationForm(UserCreationForm):
     display_name = forms.CharField(max_length=150)
@@ -216,22 +217,36 @@ class CreateTaskForm(forms.ModelForm):
 
         instance = super().save(commit=False)
         is_new = instance._state.adding 
-    
-        name = self.cleaned_data.get('name')
-        description = self.cleaned_data.get('description')
-        if is_new: #only call the wizardify function if the task was just created
-            try:
-                fantasy_name, fantasy_description = askWizard(name, description)
-                instance.fantasy_name = fantasy_name
-                instance.fantasy_description = fantasy_description
-            except Exception:
-                # this ensures that no matter what happens with the askWizard function
-                # a task will still be created
-                pass
         if commit:
             instance.save()
             self.save_m2m() 
+            if is_new:
+                transaction.on_commit(
+                        lambda: self.start_async_wizard(
+                        instance.pk, instance.name, instance.description
+                        )
+                    )
+        
         return instance
+
+    #these 2 helpers are needed so that task creation will never be delayed by the ai wizard
+    def start_async_wizard(self, task_id, name, description):
+        thread = threading.Thread(
+            target=self.run_wizard_async,
+                args=(task_id, name, description)
+        )
+        thread.daemon = True 
+        thread.start()
+
+    @staticmethod
+    def run_wizard_async(task_id, name, description):
+        f_name, f_desc = askWizard(name, description)
+
+        if f_name and f_desc: #do nothing if they are None
+            Task.objects.filter(pk=task_id).update(
+                fantasy_name=f_name,
+                fantasy_description=f_desc
+            )
 
     def clean_affiliation(self):
         party = self.cleaned_data["affiliation"]
@@ -259,6 +274,8 @@ class CreateTaskForm(forms.ModelForm):
             raise forms.ValidationError("Recurring days cannot be negative.")
         
         return recurring
+
+
 
 
 class TaskDifficultyVoteForm(forms.Form):
