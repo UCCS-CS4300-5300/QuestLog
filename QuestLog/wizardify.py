@@ -3,6 +3,8 @@ import json
 import random
 import os
 from dotenv import load_dotenv
+import logging
+from django.core.cache import cache  # Import Django's cache
 
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
@@ -44,6 +46,7 @@ def askWizard (name, desc):
         case 2: quest_giver = "The spoiled princess Lysandria"
         case 3: quest_giver = "The humble barkeep Tobias"
         case 4: quest_giver = "The sniveling goblin Gug"
+        case _: return (nameFailed, descFailed) #this will never occur
    
     prompt = f"""
     You are a {quest_giver} from a fantasy world.
@@ -75,7 +78,7 @@ def askWizard (name, desc):
     } #Using a header like this should help keep the API key more secure. 
 
     try:
-        response = requests.post(URL, json=payload, headers=headers, timeout=5)
+        response = requests.post(URL, json=payload, headers=headers, timeout=3)
         response.raise_for_status()
         temp = response.json ()
         try: 
