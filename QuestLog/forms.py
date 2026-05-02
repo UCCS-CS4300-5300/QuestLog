@@ -213,14 +213,21 @@ class CreateTaskForm(forms.ModelForm):
 
     def save(self, commit=True):
         #this is needed to wizardify the task
+
         instance = super().save(commit=False)
-        is_new = instance.pk is None
+        is_new = instance._state.adding 
+    
         name = self.cleaned_data.get('name')
         description = self.cleaned_data.get('description')
         if is_new: #only call the wizardify function if the task was just created
-            fantasy_name, fantasy_description = askWizard(name, description)
-            instance.fantasy_name = fantasy_name
-            instance.fantasy_description = fantasy_description
+            try:
+                fantasy_name, fantasy_description = askWizard(name, description)
+                instance.fantasy_name = fantasy_name
+                instance.fantasy_description = fantasy_description
+            except Exception:
+                # this ensures that no matter what happens with the askWizard function
+                # a task will still be created
+                pass
         if commit:
             instance.save()
             self.save_m2m() 

@@ -2,7 +2,9 @@ import requests
 import json 
 import random
 import os
+import time
 from dotenv import load_dotenv
+from django.core.cache import cache
 from django.utils.html import strip_tags #clean data
 
 
@@ -15,6 +17,10 @@ API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env
 #need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
 
 
+LAST_WIZARD_FAILURE = 0 #0 means no most recent failure
+WIZ_BREAK_DURATION = 180 #if the wizard isn't working, disable it for 3 minutes
+
+
 
 def askWizard (name, desc): 
     #takes the task name and a short description as input
@@ -23,9 +29,10 @@ def askWizard (name, desc):
     #input (task name, task description)
     #output (fantasy task name, fantasy task description)
 
+    global LAST_WIZARD_FAILURE
 
+    currentTime = time.time()
     
-
     nameFailed = name
     descFailed = ("Sorry it appears some miscreant has vandalized the quest board."
     " Please view the original task to see the description for this quest")
@@ -33,7 +40,7 @@ def askWizard (name, desc):
 
 
 
-    if (not API_KEY):
+    if (not API_KEY) or ((currentTime - LAST_WIZARD_FAILURE) > WIZ_BREAK_DURATION):
         return (nameFailed, descFailed)
         #don't make a useless call if there is no API key or if the wizard isn't working
 
@@ -79,7 +86,7 @@ def askWizard (name, desc):
     } #Using a header like this should help keep the API key more secure. 
 
     try:
-        response = requests.post(URL, json=payload, headers=headers, timeout=3)
+        response = requests.post(URL, json=payload, headers=headers, timeout=2)
         response.raise_for_status()
         temp = response.json ()
         try: 
@@ -95,14 +102,20 @@ def askWizard (name, desc):
                 #the prompt gemini receives requests a max length of 50 and 400 characters
                 #but this limit is higher just to be safe.
                 #do not flag wizard as not working since it still works
-
             return (wizardName, wizardDesc)
-        except (KeyError, IndexError, TypeError):
-            #this handles if the response structure from gemini is unexpecte
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+            #this handles if the response structure from gemini is unexpected
+            LAST_WIZARD_FAILURE = time.time()
             return (nameFailed, descFailed)
-    except Exception as e:
+    except requests.exceptions.RequestException:
+        #this code functionally does nothing because of the next except Exception block
+        #but separating it out can help with potential future debugging
+        LAST_WIZARD_FAILURE = time.time()
+        return (nameFailed, descFailed)
+    except Exception:
         #this try/except block handles if we receive an error response from gemini
         #such as no api tokens left or some other error. 
+        LAST_WIZARD_FAILURE = time.time()
         return (nameFailed, descFailed)
     
 
