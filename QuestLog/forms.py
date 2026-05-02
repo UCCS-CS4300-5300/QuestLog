@@ -9,7 +9,7 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
 from .models import Party, Reward, Task, UserPoints, save_user_profile
 
-from .wizardify import askWizard
+from . import wizardify
 
 User = get_user_model()
 DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
@@ -236,6 +236,8 @@ class CreateTaskForm(forms.ModelForm):
     def __init__(self, *args, user=None, selected_party=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        self.wizard_attempted = False
+        self.wizard_reworded = False
         self.fields["affiliation"].queryset = Party.objects.none()
 
         if user is not None:
@@ -259,11 +261,13 @@ class CreateTaskForm(forms.ModelForm):
         instance = super().save(commit=False)
         is_new = instance._state.adding 
         if is_new: #only call the wizardify function if the task was just created
-                name = self.cleaned_data.get('name')
-                description = self.cleaned_data.get('description')
-                fantasy_name, fantasy_description = askWizard(name, description)
-                instance.fantasy_name = fantasy_name
-                instance.fantasy_description = fantasy_description
+            self.wizard_attempted = True
+            name = self.cleaned_data.get('name')
+            description = self.cleaned_data.get('description')
+            fantasy_name, fantasy_description = wizardify.askWizard(name, description)
+            instance.fantasy_name = fantasy_name
+            instance.fantasy_description = fantasy_description
+            self.wizard_reworded = bool(fantasy_name or fantasy_description)
         
         if commit:
             instance.save()

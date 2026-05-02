@@ -773,6 +773,18 @@ def create_task(request):
                     user_points.save(update_fields=["points"])
 
             messages.success(request, f"{task.name} was added to {task.affiliation.party_name}.")
+            if form.wizard_reworded:
+                messages.info(
+                    request,
+                    "The AI wizard reworded this task. Use Show original on the task card "
+                    "to toggle back to your text.",
+                )
+            elif form.wizard_attempted:
+                messages.warning(
+                    request,
+                    "The task was created, but the AI wizard did not return a fantasy rewrite. "
+                    "Check the Render logs for 'Gemini wizard' to see the API error.",
+                )
             if task.bounty > 0:
                 messages.info(
                     request,

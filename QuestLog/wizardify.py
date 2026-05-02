@@ -11,6 +11,7 @@ import time
 import requests
 from dotenv import load_dotenv
 from django.utils.html import strip_tags
+from django.conf import settings
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
@@ -21,30 +22,36 @@ load_dotenv()
 
 
 LAST_WIZARD_FAILURE = 0
+LAST_WIZARD_FAILURE_REASON = ""
 WIZ_BREAK_DURATION = 180
 
 
-def get_api_key():
-    return os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
+def remember_failure(reason, use_cooldown=True):
+    global LAST_WIZARD_FAILURE
+    global LAST_WIZARD_FAILURE_REASON
 
-
-def get_model_name():
-    return os.getenv("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL
+    LAST_WIZARD_FAILURE_REASON = reason
+    if use_cooldown:
+        LAST_WIZARD_FAILURE = time.time()
 
 
 def askWizard(name, desc):
     """Return a fantasy title and description, or (None, None) if Gemini is unavailable."""
-    global LAST_WIZARD_FAILURE
-
     current_time = time.time()
     failed_response = (None, None)
 
     if (current_time - LAST_WIZARD_FAILURE) < WIZ_BREAK_DURATION:
+        LOGGER.warning(
+            "Gemini wizard skipped because it is cooling down after a previous failure: %s",
+            LAST_WIZARD_FAILURE_REASON or "unknown reason",
+        )
         return failed_response
 
-    api_key = get_api_key()
+    api_key = settings.GEMINI_API_KEY if settings.GEMINI_API_KEY is not None else os.getenviron.get('API_KEY')
     if not api_key:
-        LOGGER.info("Gemini wizard skipped because API_KEY/GEMINI_API_KEY is not configured.")
+        reason = "API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY is not configured."
+        remember_failure(reason, use_cooldown=False)
+        LOGGER.warning("Gemini wizard skipped because %s", reason)
         return failed_response
 
     random_number = random.randint(1, 4)
@@ -89,7 +96,7 @@ def askWizard(name, desc):
         },
     }
 
-    model_name = get_model_name()
+    model_name = DEFAULT_GEMINI_MODEL
     request_url = URL_TEMPLATE.format(model=model_name)
     headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
 
@@ -103,23 +110,38 @@ def askWizard(name, desc):
         wizard_desc = strip_tags(str(reply["fantasy_description"])).strip()
 
         if (not wizard_name) or (not wizard_desc):
+            remember_failure("Gemini wizard returned an empty fantasy title or description.")
+            LOGGER.warning("Gemini wizard returned an empty fantasy title or description.")
             return failed_response
 
-        if (len(wizard_name) > 120) or (len(wizard_desc) > 500):
-            LOGGER.warning("Gemini wizard response was longer than the task field limits.")
+        if (len(wizard_name) > 120) or (len(wizard_desc) > 5000):
+            reason = "Gemini wizard response was longer than the task field limits."
+            remember_failure(reason, use_cooldown=False)
+            LOGGER.warning("%s", reason)
             return failed_response
 
         return (wizard_name, wizard_desc)
     except requests.exceptions.RequestException as exc:
-        LAST_WIZARD_FAILURE = time.time()
-        status_code = getattr(getattr(exc, "response", None), "status_code", "unknown")
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", "unknown")
+        response_preview = ""
+        if response is not None:
+            response_preview = response.text.replace("\n", " ")[:500]
+
+        reason = (
+            f"Gemini request failed for model {model_name} with status {status_code}. "
+            f"{response_preview}"
+        ).strip()
+        remember_failure(reason)
         LOGGER.warning(
-            "Gemini wizard request failed for model %s with status %s.",
+            "Gemini wizard request failed for model %s with status %s. Response: %s",
             model_name,
             status_code,
+            response_preview,
         )
         return failed_response
-    except (KeyError, IndexError, TypeError, ValueError):
-        LAST_WIZARD_FAILURE = time.time()
-        LOGGER.warning("Gemini wizard returned an unexpected response shape.")
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        reason = f"Gemini wizard returned an unexpected response shape: {exc}"
+        remember_failure(reason)
+        LOGGER.warning("%s", reason)
         return failed_response

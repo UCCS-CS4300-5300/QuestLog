@@ -17,6 +17,7 @@ from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import SimpleTestCase, TestCase
@@ -314,6 +315,7 @@ class WizardifyTests(SimpleTestCase):
         from . import wizardify
 
         wizardify.LAST_WIZARD_FAILURE = 0
+        wizardify.LAST_WIZARD_FAILURE_REASON = ""
 
     def test_ask_wizard_uses_current_gemini_rest_request_shape(self):
         from . import wizardify
@@ -341,7 +343,12 @@ class WizardifyTests(SimpleTestCase):
 
         with patch.dict(
             os.environ,
-            {"API_KEY": "test-api-key", "GEMINI_API_KEY": "", "GEMINI_MODEL": ""},
+            {
+                "API_KEY": "test-api-key",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
+                "GEMINI_MODEL": "",
+            },
         ):
             with patch("QuestLog.wizardify.requests.post", return_value=response) as mock_post:
                 result = wizardify.askWizard("Clean kitchen", "Reset the tables.")
@@ -361,7 +368,10 @@ class WizardifyTests(SimpleTestCase):
     def test_ask_wizard_skips_api_when_key_is_missing(self):
         from . import wizardify
 
-        with patch.dict(os.environ, {"API_KEY": "", "GEMINI_API_KEY": ""}):
+        with patch.dict(
+            os.environ,
+            {"API_KEY": "", "GEMINI_API_KEY": "", "GOOGLE_API_KEY": ""},
+        ):
             with patch("QuestLog.wizardify.requests.post") as mock_post:
                 result = wizardify.askWizard("Clean kitchen", "Reset the tables.")
 
@@ -1480,7 +1490,7 @@ class TaskWorkflowTests(TestCase):
         self.client.force_login(self.creator)
 
         with patch(
-            "QuestLog.forms.askWizard",
+            "QuestLog.forms.wizardify.askWizard",
             return_value=("Polish the Hall of Guilds", "Restore the tables after the raid."),
         ):
             response = self.client.post(
@@ -1500,6 +1510,32 @@ class TaskWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(task.fantasy_name, "Polish the Hall of Guilds")
         self.assertEqual(task.fantasy_description, "Restore the tables after the raid.")
+
+    def test_create_task_post_warns_when_wizard_returns_no_rewrite(self):
+        self.client.force_login(self.creator)
+
+        with patch("QuestLog.forms.wizardify.askWizard", return_value=(None, None)):
+            response = self.client.post(
+                reverse("QuestLog:create_task") + f"?guid={self.party.guid}",
+                {
+                    "guid": str(self.party.guid),
+                    "affiliation": self.party.id,
+                    "name": "Clean the guild hall",
+                    "description": "Sweep the floors and reset the tables after raid night.",
+                    "difficulty_rating": 4,
+                    "recurring": 0,
+                },
+            )
+
+        task = Task.objects.get(name="Clean the guild hall")
+        user_messages = [str(message) for message in get_messages(response.wsgi_request)]
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(task.fantasy_name)
+        self.assertIsNone(task.fantasy_description)
+        self.assertTrue(
+            any("AI wizard did not return a fantasy rewrite" in message for message in user_messages)
+        )
 
     def test_tasks_view_shows_add_task_link_for_selected_party(self):
         self.client.force_login(self.creator)
