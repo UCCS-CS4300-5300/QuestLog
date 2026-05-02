@@ -40,13 +40,14 @@ def askWizard (name, desc):
     random_number = random.randint(1, 4)
     #randomly determine what fantasy character is giving the quest
     #can skew the odds later to make some more common or uncommon for fun
-    quest_giver = ""
-    match random_number:
-        case 1: quest_giver = "The mighty wizard Aeltharion"
-        case 2: quest_giver = "The spoiled princess Lysandria"
-        case 3: quest_giver = "The humble barkeep Tobias"
-        case 4: quest_giver = "The sniveling goblin Gug"
-        case _: return (nameFailed, descFailed) #this will never occur
+
+    quest_givers = {
+        1: "The mighty wizard Aeltharion",
+        2: "The spoiled princess Lysandria",
+        3: "The humble barkeep Tobias",
+        4: "The sniveling goblin Gug"
+    }
+    quest_giver = quest_givers.get(random_number)
    
     prompt = f"""
     You are a {quest_giver} from a fantasy world.
