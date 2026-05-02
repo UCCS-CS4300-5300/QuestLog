@@ -3,7 +3,7 @@ import json
 import random
 import os
 from dotenv import load_dotenv
-import logging
+
 
 load_dotenv() 
 API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
@@ -83,6 +83,12 @@ def askWizard (name, desc):
             reply = json.loads(rawStr)
             wizardName = reply['fantasy_task']
             wizardDesc = reply['fantasy_description']
+            if (len(wizardName) > 120) or (len(wizardDesc) > 500):
+                return (nameFailed, descFailed) 
+                #gemini's response was too long. 
+                #the prompt gemini receives requests a max length of 50 and 400 characters
+                #but this limit is higher just to be safe.
+
             return (wizardName, wizardDesc)
         except (KeyError, IndexError, TypeError):
             #this handles if the response structure from gemini is unexpected
