@@ -1,4 +1,12 @@
+"""Tests for the Quest Log app."""
+
+# pylint: disable=missing-class-docstring,missing-function-docstring,no-member
+# pylint: disable=protected-access,too-many-arguments,too-many-instance-attributes
+# pylint: disable=too-many-lines,too-many-positional-arguments,too-many-public-methods
+# pylint: disable=import-outside-toplevel,invalid-name,redefined-outer-name,reimported
+
 import importlib
+import json
 import os
 import shutil
 import sys
@@ -10,15 +18,26 @@ from unittest.mock import Mock, patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.test import SimpleTestCase, TestCase
 from django.urls import clear_url_caches, resolve, reverse
 from PIL import Image
 
-from .forms import CreateTaskForm, QuestLogUserCreationForm
-from .models import Party, PartyInvitation, Reward, Task, TaskDifficultyVote, UserPoints, UserProfile, get_user_profile, profile_picture_upload_to
+from .forms import CreateTaskForm, QuestLogUserCreationForm, RewardForm
+from .models import (
+    Party,
+    PartyInvitation,
+    Reward,
+    RewardPurchase,
+    Task,
+    TaskDifficultyVote,
+    UserPoints,
+    UserProfile,
+    get_default_reward,
+    get_user_profile,
+    profile_picture_upload_to,
+)
 from .urls import urlpatterns
-
-import json
 
 EXPECTED_VIEW_GET_STATUSES = {
     "home": 200,
@@ -34,6 +53,7 @@ EXPECTED_VIEW_GET_STATUSES = {
     'parties': 302,
     'party_details': 302,
     'leaderboard': 302,
+    'rewards': 302,
     'upload_task_proof': 405,
     'create_party': 302,
 }
@@ -55,10 +75,15 @@ class ViewReachabilityTests(TestCase):
 
     def test_all_named_urls_are_accounted_for(self):
         discovered_names = {pattern.name for pattern in urlpatterns if pattern.name}
-        
+
         # routes with required path parameters are tested separately
-        ignored_names = { "accept_party_invitation", "decline_party_invitation", "vote_task_difficulty" }
-        
+        ignored_names = {
+            "accept_party_invitation",
+            "decline_party_invitation",
+            "purchase_reward",
+            "vote_task_difficulty",
+        }
+
         self.assertEqual(discovered_names - ignored_names, set(EXPECTED_VIEW_GET_STATUSES))
 
     def test_all_named_urls_return_expected_status_codes(self):
@@ -161,21 +186,97 @@ class SettingsBranchCoverageTests(SimpleTestCase):
         module = importlib.import_module("config.settings")
         original_argv = sys.argv[:]
         original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        original_render_url = os.environ.get("RENDER_EXTERNAL_URL")
         original_debug = os.environ.get("DJANGO_DEBUG")
 
         try:
             os.environ["RENDER_EXTERNAL_HOSTNAME"] = "example.test"
+            os.environ.pop("RENDER_EXTERNAL_URL", None)
             os.environ["DJANGO_DEBUG"] = "0"
             sys.argv = ["manage.py", "runserver"]
 
             reloaded = importlib.reload(module)
             self.assertIn("example.test", reloaded.ALLOWED_HOSTS)
+            self.assertIn("https://example.test", reloaded.CSRF_TRUSTED_ORIGINS)
             self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", reloaded.MIDDLEWARE)
         finally:
             if original_render is None:
                 os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
             else:
                 os.environ["RENDER_EXTERNAL_HOSTNAME"] = original_render
+
+            if original_render_url is None:
+                os.environ.pop("RENDER_EXTERNAL_URL", None)
+            else:
+                os.environ["RENDER_EXTERNAL_URL"] = original_render_url
+
+            if original_debug is None:
+                os.environ.pop("DJANGO_DEBUG", None)
+            else:
+                os.environ["DJANGO_DEBUG"] = original_debug
+
+            sys.argv = original_argv
+            importlib.reload(module)
+
+    def test_render_external_url_configures_allowed_host_and_csrf_origin(self):
+        module = importlib.import_module("config.settings")
+        original_argv = sys.argv[:]
+        original_render = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        original_render_url = os.environ.get("RENDER_EXTERNAL_URL")
+        original_debug = os.environ.get("DJANGO_DEBUG")
+
+        try:
+            os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            os.environ["RENDER_EXTERNAL_URL"] = "https://preview-questlog.onrender.com"
+            os.environ["DJANGO_DEBUG"] = "0"
+            sys.argv = ["manage.py", "runserver"]
+
+            reloaded = importlib.reload(module)
+            self.assertIn("preview-questlog.onrender.com", reloaded.ALLOWED_HOSTS)
+            self.assertIn(
+                "https://preview-questlog.onrender.com",
+                reloaded.CSRF_TRUSTED_ORIGINS,
+            )
+        finally:
+            if original_render is None:
+                os.environ.pop("RENDER_EXTERNAL_HOSTNAME", None)
+            else:
+                os.environ["RENDER_EXTERNAL_HOSTNAME"] = original_render
+
+            if original_render_url is None:
+                os.environ.pop("RENDER_EXTERNAL_URL", None)
+            else:
+                os.environ["RENDER_EXTERNAL_URL"] = original_render_url
+
+            if original_debug is None:
+                os.environ.pop("DJANGO_DEBUG", None)
+            else:
+                os.environ["DJANGO_DEBUG"] = original_debug
+
+            sys.argv = original_argv
+            importlib.reload(module)
+
+    def test_render_uses_forwarded_proto_for_secure_requests(self):
+        module = importlib.import_module("config.settings")
+        original_argv = sys.argv[:]
+        original_render_flag = os.environ.get("RENDER")
+        original_debug = os.environ.get("DJANGO_DEBUG")
+
+        try:
+            os.environ["RENDER"] = "true"
+            os.environ["DJANGO_DEBUG"] = "0"
+            sys.argv = ["manage.py", "runserver"]
+
+            reloaded = importlib.reload(module)
+            self.assertEqual(
+                reloaded.SECURE_PROXY_SSL_HEADER,
+                ("HTTP_X_FORWARDED_PROTO", "https"),
+            )
+        finally:
+            if original_render_flag is None:
+                os.environ.pop("RENDER", None)
+            else:
+                os.environ["RENDER"] = original_render_flag
 
             if original_debug is None:
                 os.environ.pop("DJANGO_DEBUG", None)
@@ -311,7 +412,11 @@ class UserProfileTests(TestCase):
     def test_profile_post_all_entries(self):
         user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
         self.client.force_login(user)
-        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname", "email": "test3@example.com", }), content_type="application/json")
+        resp = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({"display_name": "testname", "email": "test3@example.com"}),
+            content_type="application/json",
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(get_user_profile(user).display_name, "testname")
         user = get_user_model().objects.get(pk=user.pk)
@@ -320,14 +425,22 @@ class UserProfileTests(TestCase):
     def test_profile_post_partial_entries(self):
         user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
         self.client.force_login(user)
-        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"display_name": "testname"}), content_type="application/json")
+        resp = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({"display_name": "testname"}),
+            content_type="application/json",
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(get_user_profile(user).display_name, "testname")
 
     def test_profile_post_bad(self):
         user = AuthenticationFlowTests.create_user(AuthenticationFlowTests, "liljit")
         self.client.force_login(user)
-        resp = self.client.post(reverse(f"QuestLog:profile"), json.dumps({"ghjghkjghj": "testname"}), content_type="application/json")
+        resp = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({"ghjghkjghj": "testname"}),
+            content_type="application/json",
+        )
         self.assertEqual(resp.status_code, 400)
 
 
@@ -1077,7 +1190,7 @@ class LeaderboardViewTests(TestCase):
         from django.contrib.auth import get_user_model
         from django.db import IntegrityError
 
-        from .models import Party, Reward, UserPoints, get_user_profile
+        from .models import Party, UserPoints, get_user_profile
 
         self.IntegrityError = IntegrityError
         User = get_user_model()
@@ -1122,7 +1235,7 @@ class LeaderboardViewTests(TestCase):
         self.party1.members.add(self.user1, self.user2)
         self.party2.members.add(self.user1, self.user3)
 
-        self.reward = Reward.objects.create(class_attributes="Default Reward")
+        self.reward = get_default_reward()
 
         self.user1_red_points = UserPoints.objects.create(
             user=self.user1,
@@ -1244,7 +1357,7 @@ class LeaderboardViewTests(TestCase):
                 points=999,
                 rewards=self.reward,
             )
-    
+
     def test_anonymous_user_does_not_see_leaderboard_link(self):
         response = self.client.get(reverse("QuestLog:home"))
 
@@ -1306,6 +1419,26 @@ class TaskWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "create_task.html")
         self.assertEqual(response.context["selected_party"], self.party)
+
+    def test_create_task_redirects_for_malformed_party_guid(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:create_task"),
+            {"guid": "not-a-guid"},
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
+
+    def test_tasks_redirects_for_malformed_party_guid(self):
+        self.client.force_login(self.creator)
+
+        response = self.client.get(
+            reverse("QuestLog:tasks"),
+            {"guid": "not-a-guid"},
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:tasks"))
 
     def test_create_task_form_uses_party_name_for_affiliation_label(self):
         form = CreateTaskForm(user=self.creator)
@@ -1443,6 +1576,270 @@ class TaskWorkflowTests(TestCase):
             ).exists()
         )
 
+
+class RewardShopAndProfileInventoryTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="rewardhero",
+            email="rewardhero@example.com",
+            password="test-password",
+        )
+        self.creator = User.objects.create_user(
+            username="rewardcreator",
+            email="rewardcreator@example.com",
+            password="test-password",
+        )
+        get_user_profile(self.user)
+        get_user_profile(self.creator)
+
+        self.party = Party.objects.create(
+            party_name="Reward Party",
+            creator=self.creator,
+        )
+        self.party.members.add(self.user, self.creator)
+        self.default_reward = get_default_reward()
+
+    def make_task_proof(self, filename="proof.gif"):
+        return SimpleUploadedFile(
+            filename,
+            AuthenticationFlowTests.TEST_IMAGE_BYTES,
+            content_type="image/gif",
+        )
+
+    def create_task_for_user(self, **overrides):
+        defaults = {
+            "owner": self.user,
+            "affiliation": self.party,
+            "name": "Finish the dishes",
+            "description": "Proof-based contribution.",
+            "difficulty_rating": 8,
+            "point_value": 80,
+            "recurring": 0,
+        }
+        defaults.update(overrides)
+        return Task.objects.create(**defaults)
+
+    def test_get_default_reward_reuses_single_placeholder(self):
+        first_reward = get_default_reward()
+        second_reward = get_default_reward()
+
+        self.assertEqual(first_reward.pk, self.default_reward.pk)
+        self.assertEqual(second_reward.pk, first_reward.pk)
+        self.assertEqual(
+            Reward.objects.filter(
+                class_attributes="Default Reward",
+                party__isnull=True,
+            ).count(),
+            1,
+        )
+
+    def test_get_default_reward_handles_concurrent_create_race(self):
+        with patch("QuestLog.models.Reward.objects.get_or_create", side_effect=IntegrityError):
+            reward = get_default_reward()
+
+        self.assertEqual(reward.pk, self.default_reward.pk)
+
+    def test_rewards_page_requires_authentication(self):
+        response = self.client.get(reverse("QuestLog:rewards"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("QuestLog:login"), response.url)
+
+    def test_task_completion_points_can_purchase_reward(self):
+        task = self.create_task_for_user()
+        reward = Reward.objects.create(
+            party=self.party,
+            name="Pick dinner",
+            class_attributes="Pick dinner",
+            description="Choose the next shared meal.",
+            point_cost=60,
+            created_by=self.creator,
+        )
+
+        self.client.force_login(self.user)
+        upload_response = self.client.post(
+            reverse("QuestLog:upload_task_proof"),
+            {
+                "task_id": task.id,
+                "proof_file": self.make_task_proof(),
+            },
+        )
+        purchase_response = self.client.post(
+            reverse("QuestLog:purchase_reward", args=[reward.id]),
+            {"guid": str(self.party.guid)},
+        )
+
+        user_points = UserPoints.objects.get(user=self.user, party=self.party)
+
+        self.assertRedirects(
+            upload_response,
+            reverse("QuestLog:tasks") + f"?guid={self.party.guid}",
+        )
+        self.assertRedirects(
+            purchase_response,
+            reverse("QuestLog:rewards") + f"?guid={self.party.guid}",
+        )
+        self.assertEqual(user_points.points, 80)
+        self.assertEqual(user_points.spent_points, 60)
+        self.assertEqual(user_points.available_points, 20)
+        self.assertEqual(user_points.rewards, reward)
+        self.assertTrue(
+            RewardPurchase.objects.filter(
+                user=self.user,
+                party=self.party,
+                reward=reward,
+                points_spent=60,
+            ).exists()
+        )
+
+    def test_purchase_requires_enough_available_points(self):
+        reward = Reward.objects.create(
+            party=self.party,
+            name="Choose movie night",
+            class_attributes="Choose movie night",
+            point_cost=100,
+            created_by=self.creator,
+        )
+        UserPoints.objects.create(
+            user=self.user,
+            party=self.party,
+            points=50,
+            rewards=self.default_reward,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("QuestLog:purchase_reward", args=[reward.id]),
+            {"guid": str(self.party.guid)},
+        )
+
+        user_points = UserPoints.objects.get(user=self.user, party=self.party)
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertEqual(user_points.spent_points, 0)
+        self.assertFalse(
+            RewardPurchase.objects.filter(user=self.user, reward=reward).exists()
+        )
+
+    def test_party_creator_can_add_reward_to_shop(self):
+        self.client.force_login(self.creator)
+        response = self.client.post(
+            reverse("QuestLog:rewards") + f"?guid={self.party.guid}",
+            {
+                "guid": str(self.party.guid),
+                "name": "Skip dish duty",
+                "description": "Redeem for one agreed chore pass.",
+                "point_cost": 80,
+                "reward_type": Reward.RewardType.CUSTOM,
+            },
+        )
+
+        self.assertRedirects(response, reverse("QuestLog:rewards") + f"?guid={self.party.guid}")
+        self.assertTrue(
+            Reward.objects.filter(
+                party=self.party,
+                name="Skip dish duty",
+                point_cost=80,
+                created_by=self.creator,
+            ).exists()
+        )
+
+    def test_profile_rewards_can_be_equipped_after_purchase(self):
+        title_reward = Reward.objects.create(
+            party=self.party,
+            name="Title: Helpful Hero",
+            class_attributes="Title: Helpful Hero",
+            point_cost=30,
+            reward_type=Reward.RewardType.PROFILE_TITLE,
+            profile_value="Helpful Hero",
+            created_by=self.creator,
+        )
+        card_reward = Reward.objects.create(
+            party=self.party,
+            name="Calling Card: Chore Crusher",
+            class_attributes="Calling Card: Chore Crusher",
+            point_cost=30,
+            reward_type=Reward.RewardType.CALLING_CARD,
+            profile_value="Chore Crusher",
+            created_by=self.creator,
+        )
+        RewardPurchase.objects.create(
+            user=self.user,
+            party=self.party,
+            reward=title_reward,
+            points_spent=30,
+        )
+        RewardPurchase.objects.create(
+            user=self.user,
+            party=self.party,
+            reward=card_reward,
+            points_spent=30,
+        )
+        for index in range(5):
+            self.create_task_for_user(
+                name=f"Completed task {index}",
+                status=Task.Status.COMPLETED,
+            )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({
+                "display_name": "Badge Hero",
+                "email": "badgehero@example.com",
+                "profile_title": "Helpful Hero",
+                "calling_card": "Chore Crusher",
+                "selected_badges": ["first_quest", "helping_hand"],
+            }),
+            content_type="application/json",
+        )
+
+        profile = get_user_profile(self.user)
+        profile.refresh_from_db()
+        self.user.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(profile.display_name, "Badge Hero")
+        self.assertEqual(self.user.email, "badgehero@example.com")
+        self.assertEqual(profile.profile_title, "Helpful Hero")
+        self.assertEqual(profile.calling_card, "Chore Crusher")
+        self.assertEqual(profile.selected_badges, ["first_quest", "helping_hand"])
+
+    def test_profile_rejects_unearned_rewards_and_badges(self):
+        self.create_task_for_user(status=Task.Status.COMPLETED)
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("QuestLog:profile"),
+            json.dumps({
+                "profile_title": "Not Redeemed",
+                "selected_badges": ["guild_legend"],
+            }),
+            content_type="application/json",
+        )
+
+        profile = get_user_profile(self.user)
+        profile.refresh_from_db()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(profile.profile_title, "")
+        self.assertEqual(profile.selected_badges, [])
+
+    def test_reward_form_requires_profile_text_for_profile_rewards(self):
+        form = RewardForm(
+            data={
+                "name": "Title: Mystery",
+                "description": "A profile title without text should not save.",
+                "point_cost": 30,
+                "reward_type": Reward.RewardType.PROFILE_TITLE,
+                "profile_value": "",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("profile_value", form.errors)
+
+
 class PartyInvitationWorkflowTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -1470,7 +1867,7 @@ class PartyInvitationWorkflowTests(TestCase):
         get_user_profile(self.other_user)
 
         # reward used for userpoints creation
-        self.reward = Reward.objects.create(class_attributes="Default Reward")
+        self.reward = get_default_reward()
 
     def test_create_party_requires_authentication(self):
         response = self.client.get(reverse("QuestLog:create_party"))

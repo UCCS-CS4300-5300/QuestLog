@@ -24,7 +24,13 @@
                     <h1 class="h3" id="profile-heading">
                         {{ profile.display_name|default:request.user.username }}
                     </h1>
-                    <p class="text-muted mb-4">Quest Log profile</p>
+                    <div id="profile-title-badge"
+                         class="badge text-bg-primary mb-2{% if not profile.profile_title %} d-none{% endif %}">
+                        {{ profile.profile_title }}
+                    </div>
+                    <p class="text-muted mb-4" id="calling-card-display">
+                        {{ profile.calling_card|default:"Quest Log profile" }}
+                    </p>
                     <div class="text-start mb-4">
                         <h5>Account Information</h5>
                         <!-- only read view (user pov)-->
@@ -39,6 +45,14 @@
                             <p>
                                 <strong>Email:</strong>
                                 <span id="email-text">{{ request.user.email|default:"Not provided" }}</span>
+                            </p>
+                            <p>
+                                <strong>Title:</strong>
+                                <span id="title-text">{{ profile.profile_title|default:"None equipped" }}</span>
+                            </p>
+                            <p>
+                                <strong>Calling Card:</strong>
+                                <span id="calling-card-text">{{ profile.calling_card|default:"None equipped" }}</span>
                             </p>
                         </div>
                         <!-- edit view -->
@@ -62,6 +76,45 @@
                             <p class="mb-3">
                                 <strong>Username:</strong> {{ request.user.username }}
                             </p>
+                            <div class="mb-3">
+                                <label for="profile-title-input" class="form-label"><strong>Title</strong></label>
+                                <select class="form-select" id="profile-title-input">
+                                    <option value="">None equipped</option>
+                                    {% for title in title_options %}
+                                        <option value="{{ title }}" {% if profile.profile_title == title %}selected{% endif %}>{{ title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="calling-card-input" class="form-label"><strong>Calling Card</strong></label>
+                                <select class="form-select" id="calling-card-input">
+                                    <option value="">None equipped</option>
+                                    {% for card in calling_card_options %}
+                                        <option value="{{ card }}" {% if profile.calling_card == card %}selected{% endif %}>{{ card }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-label"><strong>Display Badges</strong></div>
+                                {% if earned_badges %}
+                                    <div class="small text-muted mb-2">Choose up to {{ max_display_badges }} earned badge{{ max_display_badges|pluralize }}.</div>
+                                    {% for badge in earned_badges %}
+                                        <div class="form-check">
+                                            <input class="form-check-input badge-choice"
+                                                   type="checkbox"
+                                                   value="{{ badge.code }}"
+                                                   id="badge-choice-{{ badge.code }}"
+                                                   {% if badge.code in selected_badge_codes %}checked{% endif %}>
+                                            <label class="form-check-label" for="badge-choice-{{ badge.code }}">
+                                                {{ badge.name }}
+                                                <span class="text-muted small">- {{ badge.description }}</span>
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-muted small">Complete a task to earn your first badge.</div>
+                                {% endif %}
+                            </div>
                         </div>
                         <!-- success/error message -->
                         <div id="profile-message" class="alert d-none mt-3" role="alert"></div>
@@ -73,10 +126,45 @@
                             <button type="button" class="btn btn-outline-secondary" id="cancel-btn" style="display: none;">Cancel</button>
                         </div>
                     </div>
-                    <!-- badges section, nothing new -->
                     <div class="text-start">
                         <h5>Badges</h5>
-                        <p class="text-muted mb-0">No badges earned yet.</p>
+                        <div id="displayed-badges">
+                            {% if selected_badges %}
+                                <div class="d-flex flex-wrap gap-2 mb-2">
+                                    {% for badge in selected_badges %}
+                                        <span class="badge text-bg-success"
+                                              data-badge-code="{{ badge.code }}"
+                                              data-badge-description="{{ badge.description }}">
+                                            {{ badge.name }}
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            {% elif earned_badges %}
+                                <p class="text-muted mb-2">Choose earned badges while editing your profile.</p>
+                            {% else %}
+                                <p class="text-muted mb-2">No badges earned yet.</p>
+                            {% endif %}
+                        </div>
+                        <div class="small text-muted mb-3">{{ completed_task_count }} completed quest{{ completed_task_count|pluralize }}</div>
+                        {% if earned_badges %}
+                            <div class="small fw-semibold mb-1">Earned</div>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                {% for badge in earned_badges %}
+                                    <span class="badge text-bg-secondary">{{ badge.name }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        {% if locked_badges %}
+                            <div class="small fw-semibold mb-1">More to earn</div>
+                            <div class="list-group list-group-flush">
+                                {% for badge in locked_badges %}
+                                    <div class="list-group-item px-0">
+                                        <div class="fw-semibold">{{ badge.name }}</div>
+                                        <div class="small text-muted">{{ badge.description }}</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
                     </div>
                     <a class="nav-link mt-3" href="{% url 'QuestLog:logout' %}">Logout</a>
                 </div>
@@ -93,10 +181,20 @@
         const cancelBtn =document.getElementById("cancel-btn");
         const nameText =document.getElementById("display-name-text");
         const emailText =document.getElementById("email-text");
+        const titleText = document.getElementById("title-text");
+        const callingCardText = document.getElementById("calling-card-text");
+        const titleBadge = document.getElementById("profile-title-badge");
+        const callingCardDisplay = document.getElementById("calling-card-display");
+        const displayedBadges = document.getElementById("displayed-badges");
         const heading =document.getElementById("profile-heading");
         const nameInput =document.getElementById("display-name-input");
         const emailInput =document.getElementById("email-input");
+        const titleInput = document.getElementById("profile-title-input");
+        const callingCardInput = document.getElementById("calling-card-input");
+        const badgeChoices = Array.from(document.querySelectorAll(".badge-choice"));
+        let currentSelectedBadges = getSelectedBadges();
         const msgBox =document.getElementById("profile-message");
+        const maxDisplayBadges = {{ max_display_badges|default:3 }};
         //show bootstrap message
         function showMsg(text, type) {
             msgBox.textContent =text;
@@ -106,6 +204,21 @@
         function clearMsg() {
             msgBox.textContent = "";
             msgBox.className ="alert d-none mt-3";
+        }
+        function getSelectedBadges() {
+            return badgeChoices
+                .filter(choice => choice.checked)
+                .map(choice => choice.value);
+        }
+        function updateDisplayedBadges(badges) {
+            if (!badges.length) {
+                displayedBadges.innerHTML = '<p class="text-muted mb-2">Choose earned badges while editing your profile.</p>';
+                return;
+            }
+            const badgeHtml = badges.map(badge => {
+                return `<span class="badge text-bg-success" data-badge-code="${badge.code}">${badge.name}</span>`;
+            }).join("");
+            displayedBadges.innerHTML = `<div class="d-flex flex-wrap gap-2 mb-2">${badgeHtml}</div>`;
         }
         //from read to edit mode
         function enterEdit() {
@@ -144,8 +257,22 @@
         cancelBtn.addEventListener("click", function () {
             nameInput.value = nameText.textContent.trim();
             emailInput.value= emailText.textContent.trim() === "Not provided" ? "" : emailText.textContent.trim();
+            titleInput.value = titleText.textContent.trim() === "None equipped" ? "" : titleText.textContent.trim();
+            callingCardInput.value = callingCardText.textContent.trim() === "None equipped" ? "" : callingCardText.textContent.trim();
+            badgeChoices.forEach(choice => {
+                choice.checked = currentSelectedBadges.includes(choice.value);
+            });
             clearMsg();
             exitEdit();
+        });
+
+        badgeChoices.forEach(choice => {
+            choice.addEventListener("change", function () {
+                if (getSelectedBadges().length > maxDisplayBadges) {
+                    choice.checked = false;
+                    showMsg(`Choose up to ${maxDisplayBadges} badges.`, "warning");
+                }
+            });
         });
 
         //when the user presses save
@@ -163,6 +290,9 @@
             saveBtn.disabled =true;
             cancelBtn.disabled =true;
             saveBtn.textContent ="Saving...";
+            const selectedTitle = titleInput.value;
+            const selectedCallingCard = callingCardInput.value;
+            const selectedBadges = getSelectedBadges();
             try {
                 //send the new updated profile data to django 
                 const resp = await fetch(window.origin + "{% url 'QuestLog:profile' %}", {
@@ -171,7 +301,13 @@
                         "Content-Type": "application/json; charset=UTF-8",
                         "X-CSRFToken": getCookie("csrftoken")},
 
-                    body: JSON.stringify({ display_name: newName, email: newEmail }) });
+                    body: JSON.stringify({
+                        display_name: newName,
+                        email: newEmail,
+                        profile_title: selectedTitle,
+                        calling_card: selectedCallingCard,
+                        selected_badges: selectedBadges
+                    }) });
                 const data = await resp.json();
                 
                 //error emssage if django rejects request
@@ -183,6 +319,13 @@
                 nameText.textContent =data.display_name || newName;
                 emailText.textContent = data.email || newEmail || "Not provided";
                 heading.textContent =data.display_name || newName;
+                titleText.textContent = data.profile_title || "None equipped";
+                callingCardText.textContent = data.calling_card || "None equipped";
+                titleBadge.textContent = data.profile_title || "";
+                titleBadge.classList.toggle("d-none", !data.profile_title);
+                callingCardDisplay.textContent = data.calling_card || "Quest Log profile";
+                updateDisplayedBadges(data.selected_badges || []);
+                currentSelectedBadges = data.selected_badge_codes || selectedBadges;
                 showMsg("Profile Updated.","success");
                 exitEdit();
             } catch (err) {

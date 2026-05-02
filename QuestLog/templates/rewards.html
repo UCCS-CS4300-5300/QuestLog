@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block title %}Rewards | Quest Log{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h3 mb-1">Rewards</h1>
+      {% if party %}
+        <div class="text-muted">
+          {{ party.party_name }} &middot; {{ user_points.available_points }} point{{ user_points.available_points|pluralize }} available
+        </div>
+      {% else %}
+        <div class="text-muted">Join a party to redeem quest points.</div>
+      {% endif %}
+    </div>
+    {% if parties %}
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          Party
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          {% for p in parties %}
+            <li><a class="dropdown-item" href="{% url 'QuestLog:rewards' %}?guid={{ p.guid }}">{{ p.party_name }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if not party %}
+    <div class="card">
+      <div class="card-body">
+        <div class="fw-semibold mb-1">No parties yet</div>
+        <div class="text-muted mb-3">Create or join a party before redeeming rewards.</div>
+        <a class="btn btn-primary" href="{% url 'QuestLog:create_party' %}">Create / join a party</a>
+      </div>
+    </div>
+  {% else %}
+    <div class="row g-3">
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header fw-semibold">Reward shop</div>
+          <div class="card-body">
+            {% if reward_catalog %}
+              <div class="list-group list-group-flush">
+                {% for reward in reward_catalog %}
+                  <div class="list-group-item px-0 d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <div class="fw-semibold">{{ reward.label }}</div>
+                      {% if reward.description %}
+                        <div class="text-muted small">{{ reward.description }}</div>
+                      {% endif %}
+                      {% if reward.updates_profile %}
+                        <div class="small mt-1">
+                          Applies to profile: <span class="fw-semibold">{{ reward.profile_reward_value }}</span>
+                        </div>
+                      {% endif %}
+                      <div class="mt-2 d-flex flex-wrap gap-2">
+                        <span class="badge text-bg-primary">{{ reward.point_cost }} point{{ reward.point_cost|pluralize }}</span>
+                        <span class="badge text-bg-secondary">{{ reward.get_reward_type_display }}</span>
+                      </div>
+                    </div>
+                    <form method="post" action="{% url 'QuestLog:purchase_reward' reward.id %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="guid" value="{{ party.guid }}">
+                      <button type="submit" class="btn btn-sm btn-primary" {% if user_points.available_points < reward.point_cost %}disabled{% endif %}>
+                        Redeem
+                      </button>
+                    </form>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="text-muted">No rewards are available for this party yet.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card mb-3">
+          <div class="card-header fw-semibold">Redeemed rewards</div>
+          <div class="card-body">
+            {% if purchased_rewards %}
+              <ul class="list-group list-group-flush">
+                {% for purchase in purchased_rewards %}
+                  <li class="list-group-item px-0 d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-semibold">{{ purchase.reward.label }}</div>
+                      {% if purchase.reward.updates_profile %}
+                        <div class="small">{{ purchase.reward.get_reward_type_display }}: {{ purchase.reward.profile_reward_value }}</div>
+                      {% endif %}
+                      <div class="small text-muted">{{ purchase.purchased_at|date:"M j, Y" }}</div>
+                    </div>
+                    <span class="badge text-bg-secondary">{{ purchase.points_spent }}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <div class="text-muted">No rewards redeemed yet.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if party.creator_id == request.user.id %}
+          <div class="card">
+            <div class="card-header fw-semibold">Add reward</div>
+            <div class="card-body">
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="guid" value="{{ party.guid }}">
+
+                <div class="mb-3">
+                  <label for="{{ reward_form.name.id_for_label }}" class="form-label">Reward name</label>
+                  {{ reward_form.name }}
+                  {% if reward_form.name.errors %}
+                    <div class="text-danger small mt-1">{{ reward_form.name.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ reward_form.description.id_for_label }}" class="form-label">Description</label>
+                  {{ reward_form.description }}
+                  {% if reward_form.description.errors %}
+                    <div class="text-danger small mt-1">{{ reward_form.description.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ reward_form.point_cost.id_for_label }}" class="form-label">Point cost</label>
+                  {{ reward_form.point_cost }}
+                  {% if reward_form.point_cost.errors %}
+                    <div class="text-danger small mt-1">{{ reward_form.point_cost.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ reward_form.reward_type.id_for_label }}" class="form-label">Reward type</label>
+                  {{ reward_form.reward_type }}
+                  {% if reward_form.reward_type.errors %}
+                    <div class="text-danger small mt-1">{{ reward_form.reward_type.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ reward_form.profile_value.id_for_label }}" class="form-label">Profile text</label>
+                  {{ reward_form.profile_value }}
+                  {% if reward_form.profile_value.help_text %}
+                    <div class="form-text">{{ reward_form.profile_value.help_text }}</div>
+                  {% endif %}
+                  {% if reward_form.profile_value.errors %}
+                    <div class="text-danger small mt-1">{{ reward_form.profile_value.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <button type="submit" class="btn btn-primary">Add reward</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
