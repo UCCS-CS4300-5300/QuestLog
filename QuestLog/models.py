@@ -6,7 +6,8 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 import uuid
-from QuestLog.utilities import scan_for_malicious_code, secure_upload_path_avatars, secure_upload_path_proofs, validate_image_file, validate_upload
+from QuestLog.utilities import (scan_for_malicious_code, secure_upload_path_avatars, 
+secure_upload_path_proofs, validate_image_file, validate_upload)
 
 from collections import defaultdict
 
@@ -174,7 +175,8 @@ class UserPoints(models.Model):
     party = models.ForeignKey(Party, on_delete=models.CASCADE)
     points = models.PositiveIntegerField(default=0)
     rewards = models.ForeignKey(Reward, on_delete=models.PROTECT)
-    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file])
+    avatar = models.FileField(upload_to=secure_upload_path_avatars,blank=True,
+                              null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file])
 
     class Meta:
         constraints = [
@@ -195,6 +197,8 @@ class Task(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
     name = models.CharField(max_length=120, default="Untitled Task")
     description = models.TextField(max_length=500)
+    fantasy_name = models.CharField(max_length=120)
+    fantasy_description = models.TextField(max_length=500)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,
         default=Status.NOT_STARTED,
@@ -204,7 +208,10 @@ class Task(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(10)],
     )
     point_value = models.PositiveIntegerField(default=0)
-    proofs = models.FileField(upload_to=secure_upload_path_proofs,blank=True,null=True,validators=[validate_upload,scan_for_malicious_code,validate_image_file]) #pictures of completed task
+    proofs = models.FileField(upload_to=secure_upload_path_proofs, blank=True,null=True,
+                              validators=[validate_upload,scan_for_malicious_code,validate_image_file]) 
+                                #pictures of completed task
+
     affiliation = models.ForeignKey(Party, on_delete=models.CASCADE)
     recurring = models.IntegerField(default=0)# 0 means doesnt recur, nonzero is number of days
     created_at = models.DateTimeField(auto_now_add=True)

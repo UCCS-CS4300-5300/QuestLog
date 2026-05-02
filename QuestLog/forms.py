@@ -5,6 +5,8 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
 from .models import Party, Task, save_user_profile
 
+from .wizardify import askWizard
+
 User = get_user_model()
 DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
 DEFAULT_ALLOWED_PROFILE_PICTURE_FORMATS = frozenset({"GIF", "JPEG", "PNG", "WEBP"})
@@ -208,6 +210,23 @@ class CreateTaskForm(forms.ModelForm):
         self.fields["description"].widget.attrs["class"] = "form-control"
         self.fields["difficulty_rating"].widget.attrs["class"] = "form-control"
         self.fields["recurring"].widget.attrs["class"] = "form-control"
+
+    def save(self, commit=True):
+        #this is needed to wizardify the task
+        instance = super().save(commit=False)
+
+        name = self.cleaned_data.get('name')
+        description = self.cleaned_data.get('description')
+
+        fantasy_name, fantasy_description = askWizard(name, description)
+
+        instance.fantasy_name = fantasy_name
+        instance.fantasy_description = fantasy_description
+
+        if commit:
+            instance.save()
+            self.save_m2m() 
+        return instance
 
     def clean_affiliation(self):
         party = self.cleaned_data["affiliation"]

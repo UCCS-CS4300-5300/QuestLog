@@ -11,7 +11,20 @@
             {% for task in tasks %}
                 <div class="card mb-3">
                     <div class="card-body">
-                        <h5 class="card-title">{{ task.name }}</h5>
+                        <h5 class="card-title">
+                            {% if task.fantasy_name %}
+                                {{ task.fantasy_name }} 
+                                <small class="text-muted" style="font-size: 0.7em;">({{ task.name }})</small>
+                            {% else %}
+                                {{ task.name }}
+                            {% endif %}
+                        </h5>
+
+                        {% if task.fantasy_description %}
+                        <p class="card-text">
+                            <i class="text-secondary">"{{ task.fantasy_description|striptags }}"</i>
+                        </p>
+                        {% endif %}
                         <p class="card-text">{{ task.description|striptags }}</p>
                         <p class="card-text mb-1"><strong>Difficulty:</strong> {{ task.difficulty_rating }}/10</p>
                         <p class="card-text mb-1"><strong>Points:</strong> {{ task.point_value }}</p>

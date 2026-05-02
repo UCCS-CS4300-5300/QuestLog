@@ -57,8 +57,24 @@
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start mb-2">
               <div>
-                <h5 class="card-title mb-1">{{ task.name }}</h5>
-                <p class="card-text text-muted mb-0">{{ task.description }}</p>
+                <h5 class="card-title mb-1">
+                  {% if task.fantasy_name %}
+                    <span class="text-primary">{{ task.fantasy_name }}</span>
+                    <div class="small text-muted" style="font-size: 0.75rem;">({{ task.name }})</div>
+                  {% else %}
+                    {{ task.name }}
+                  {% endif %}
+                </h5>
+
+                {% if task.fantasy_description %}
+                  <p class="card-text mb-2">
+                    <small><em>"{{ task.fantasy_description|striptags }}"</em></small>
+                  </p>
+                {% endif %}
+
+                <p class="card-text text-muted mb-0 small">
+                  <strong>Objective:</strong> {{ task.description|striptags }}
+                </p>
               </div>
               <span class="badge text-bg-success ms-2">Difficulty {{ task.weighted_difficulty_display }}/10</span>
               <a class="btn btn-primary" href="{% url 'QuestLog:complete_task' %}?task_id={{ task.id }}">Start Task</a>
