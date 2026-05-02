@@ -3,15 +3,20 @@ import json
 import random
 import os
 from dotenv import load_dotenv
+import logging
 
-load_dotenv() 
-API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
+#load_dotenv() 
+#API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
 #need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
 
+API_KEY="AIzaSyDsye5XJTCk-lPb9hlA02nLIsD-wFRkI1I"
 
-URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={API_KEY}"
+
+URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 #gemini-flash-latest makes it so if in the future the model being used is discontinued, 
 #it will automatically use the latest model
+
+
 
 def askWizard (name, desc): 
     #takes the task name and a short description as input
@@ -24,6 +29,12 @@ def askWizard (name, desc):
     descFailed = ("Sorry it appears some miscreant has vandalized the quest board."
     " Please view the original task to see the description for this quest")
     #if there is no in-app way to view the original task description, change descFailed into desc
+
+
+
+    if not API_KEY:
+        return (nameFailed, descFailed)
+        #don't make a useless call if there is no API key
 
     random_number = random.randint(1, 4)
     #randomly determine what fantasy character is giving the quest
@@ -58,8 +69,14 @@ def askWizard (name, desc):
         }
     }
 
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": API_KEY
+    } #Using a header like this should help keep the API key more secure. 
+
     try:
-        response = requests.post(URL, json=payload)
+        response = requests.post(URL, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         temp = response.json ()
         try: 
@@ -77,6 +94,8 @@ def askWizard (name, desc):
         #this try/except block handles if we receive an error response from gemini
         #such as no api tokens left or some other error. 
         return (nameFailed, descFailed)
+    
+print(askWizard("mow the grass", "the city council will fine us if we don't mow the lawn"))
     
 
 
