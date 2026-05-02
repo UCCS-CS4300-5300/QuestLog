@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
-from .models import Party, Task, save_user_profile
+from .models import Party, Task, UserPoints, save_user_profile
 
 User = get_user_model()
 DEFAULT_MAX_PROFILE_PICTURE_SIZE = 5 * 1024 * 1024
@@ -164,7 +164,7 @@ class CreateTaskForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ("affiliation", "name", "description", "difficulty_rating", "recurring")
+        fields = ("affiliation", "name", "description", "difficulty_rating", "recurring", "bounty")
         widgets = {
             "description": forms.Textarea(
                 attrs={
@@ -181,7 +181,15 @@ class CreateTaskForm(forms.ModelForm):
                     "step": 1,
                     "placeholder": "0 for non-recurring, or enter the number of days",
                 }
-            )
+            ),
+            "bounty": forms.NumberInput(
+                attrs={
+                    "min": 0,
+                    "step": 1,
+                    "placeholder": "0",
+                }
+            ),
+
         }
         labels = {
             "affiliation": "Party",
@@ -189,6 +197,7 @@ class CreateTaskForm(forms.ModelForm):
             "description": "Task description",
             "difficulty_rating": "Starting difficulty",
             "recurring": "Recurring interval (days)",
+            "bounty": "Bounty (optional)",
         }
 
     def __init__(self, *args, user=None, selected_party=None, **kwargs):
@@ -208,6 +217,9 @@ class CreateTaskForm(forms.ModelForm):
         self.fields["description"].widget.attrs["class"] = "form-control"
         self.fields["difficulty_rating"].widget.attrs["class"] = "form-control"
         self.fields["recurring"].widget.attrs["class"] = "form-control"
+        self.fields["bounty"].widget.attrs["class"] = "form-control"
+        self.fields["bounty"].required = False
+        self.fields["bounty"].initial = 0
 
     def clean_affiliation(self):
         party = self.cleaned_data["affiliation"]
@@ -236,12 +248,34 @@ class CreateTaskForm(forms.ModelForm):
         
         return recurring
 
+    def clean_bounty(self):
+        #cant be negative
+        bounty =self.cleaned_data.get("bounty") or 0
+        if bounty <0:
+            raise forms.ValidationError("Bounty cannot be negative.")
+        return bounty
+
+    def clean(self):
+        # makes sure user has enough points to cover the bounty itself
+        cleaned_data =super().clean()
+        bounty =cleaned_data.get("bounty") or 0
+        party =cleaned_data.get("affiliation")
+        if bounty >0 and party and self.user:
+            try:
+                user_points =UserPoints.objects.get(user=self.user, party=party)
+                if user_points.points < bounty:
+                    self.add_error(
+                        "bounty", f"Not enough points. you have {user_points.points} points in {party.party_name}.",)
+            except UserPoints.DoesNotExist:
+                self.add_error(
+                    "bounty","You don't have any points in this party yet. Complete some tasks first",)
+        return cleaned_data
 
 class TaskDifficultyVoteForm(forms.Form):
     RATING_CHOICES = [(rating, f"{rating}") for rating in range(1, 11)]
 
     rating = forms.TypedChoiceField(
         coerce=int,
-        choices=RATING_CHOICES,
+        choices = RATING_CHOICES,
         widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
