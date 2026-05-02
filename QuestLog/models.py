@@ -197,8 +197,8 @@ class Task(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL,  on_delete=models.CASCADE)
     name = models.CharField(max_length=120, default="Untitled Task")
     description = models.TextField(max_length=500)
-    fantasy_name = models.CharField(max_length=120)
-    fantasy_description = models.TextField(max_length=500)
+    fantasy_name = models.CharField(max_length=120, null=True, blank=True)
+    fantasy_description = models.TextField(max_length=500, null=True, blank=True)
     status = models.PositiveSmallIntegerField(
         choices=Status.choices,
         default=Status.NOT_STARTED,

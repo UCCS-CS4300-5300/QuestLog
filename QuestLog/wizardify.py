@@ -5,12 +5,9 @@ import os
 from dotenv import load_dotenv
 import logging
 
-#load_dotenv() 
-#API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
+load_dotenv() 
+API_KEY = os.getenv("API_KEY") #this will be None if neither render nor the .env file have the API_KEY
 #need to add "API_KEY" to render or need to have API_KEY=12345678 in .env
-
-API_KEY="AIzaSyDsye5XJTCk-lPb9hlA02nLIsD-wFRkI1I"
-
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 #gemini-flash-latest makes it so if in the future the model being used is discontinued, 
@@ -76,7 +73,7 @@ def askWizard (name, desc):
     } #Using a header like this should help keep the API key more secure. 
 
     try:
-        response = requests.post(URL, json=payload, headers=headers, timeout=10)
+        response = requests.post(URL, json=payload, headers=headers, timeout=5)
         response.raise_for_status()
         temp = response.json ()
         try: 
@@ -95,7 +92,7 @@ def askWizard (name, desc):
         #such as no api tokens left or some other error. 
         return (nameFailed, descFailed)
     
-print(askWizard("mow the grass", "the city council will fine us if we don't mow the lawn"))
+
     
 
 
