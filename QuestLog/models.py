@@ -9,8 +9,6 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
-from QuestLog.utilities import (scan_for_malicious_code, secure_upload_path_avatars, 
-secure_upload_path_proofs, validate_image_file, validate_upload)
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import IntegrityError, models, transaction

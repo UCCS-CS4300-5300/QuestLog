@@ -2,6 +2,8 @@
 This module is the main logic for the wizard rewording of tasks.
 """
 
+# pylint: disable=global-statement,invalid-name,too-many-locals,too-many-return-statements
+
 import os
 import json
 import logging
@@ -27,6 +29,7 @@ WIZ_BREAK_DURATION = 180
 
 
 def remember_failure(reason, use_cooldown=True):
+    """Remember why the wizard failed and optionally start the cooldown."""
     global LAST_WIZARD_FAILURE
     global LAST_WIZARD_FAILURE_REASON
 
@@ -47,7 +50,11 @@ def askWizard(name, desc):
         )
         return failed_response
 
-    api_key = settings.GEMINI_API_KEY if settings.GEMINI_API_KEY is not None else os.environ.get('API_KEY')
+    api_key = (
+        settings.GEMINI_API_KEY
+        if settings.GEMINI_API_KEY is not None
+        else os.environ.get('API_KEY')
+    )
     if not api_key:
         reason = "API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY is not configured."
         remember_failure(reason, use_cooldown=False)

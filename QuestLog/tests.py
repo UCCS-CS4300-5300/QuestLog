@@ -1153,7 +1153,10 @@ class TaskPagesTemplateTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="card-footer bg-transparent"')
-        self.assertContains(response, reverse("QuestLog:vote_task_difficulty", args=[self.active_task.id]))
+        self.assertContains(
+            response,
+            reverse("QuestLog:vote_task_difficulty", args=[self.active_task.id]),
+        )
         self.assertContains(response, "Your difficulty vote")
 
     def test_tasks_view_defaults_to_fantasy_copy_with_original_toggle(self):
@@ -1534,7 +1537,10 @@ class TaskWorkflowTests(TestCase):
         self.assertIsNone(task.fantasy_name)
         self.assertIsNone(task.fantasy_description)
         self.assertTrue(
-            any("AI wizard did not return a fantasy rewrite" in message for message in user_messages)
+            any(
+                "AI wizard did not return a fantasy rewrite" in message
+                for message in user_messages
+            )
         )
 
     def test_tasks_view_shows_add_task_link_for_selected_party(self):

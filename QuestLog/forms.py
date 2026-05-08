@@ -259,7 +259,8 @@ class CreateTaskForm(forms.ModelForm):
     def save(self, commit=True):
         #this is needed to wizardify the task
         instance = super().save(commit=False)
-        is_new = instance._state.adding 
+        #####changed _state.adding to pk is none, may be problematic
+        is_new = instance.pk is None
         if is_new: #only call the wizardify function if the task was just created
             self.wizard_attempted = True
             name = self.cleaned_data.get('name')
@@ -268,10 +269,10 @@ class CreateTaskForm(forms.ModelForm):
             instance.fantasy_name = fantasy_name
             instance.fantasy_description = fantasy_description
             self.wizard_reworded = bool(fantasy_name or fantasy_description)
-        
+
         if commit:
             instance.save()
-        return instance 
+        return instance
 
 
     def clean_affiliation(self):
